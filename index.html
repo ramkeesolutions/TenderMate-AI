@@ -1,0 +1,759 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#0f766e">
+<title>TenderMate AI</title>
+
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{
+    font-family:Arial,Helvetica,sans-serif;
+    background:#f3f7f6;
+    color:#17201f;
+}
+.header{
+    background:linear-gradient(135deg,#064e3b,#0f766e);
+    color:white;
+    padding:22px 20px;
+    position:sticky;
+    top:0;
+    z-index:10;
+    box-shadow:0 3px 12px #0002;
+}
+.header h1{font-size:25px}
+.header p{margin-top:5px;opacity:.85;font-size:13px}
+
+.container{
+    max-width:1100px;
+    margin:auto;
+    padding:20px;
+}
+
+.section-title{
+    margin:10px 0 15px;
+    font-size:20px;
+}
+
+.grid{
+    display:grid;
+    grid-template-columns:repeat(auto-fit,minmax(230px,1fr));
+    gap:15px;
+}
+
+.card{
+    background:white;
+    border-radius:16px;
+    padding:20px;
+    min-height:135px;
+    box-shadow:0 3px 12px #00000012;
+    border:1px solid #e2e9e7;
+    cursor:pointer;
+    transition:.2s;
+}
+.card:hover{
+    transform:translateY(-3px);
+    box-shadow:0 7px 20px #00000018;
+}
+.icon{font-size:32px;margin-bottom:12px}
+.card h3{font-size:17px;margin-bottom:7px}
+.card p{font-size:13px;color:#687472;line-height:1.4}
+
+.ai{
+    margin-top:22px;
+    background:linear-gradient(135deg,#111827,#1f2937);
+    color:white;
+    border-radius:18px;
+    padding:22px;
+}
+.ai h2{margin-bottom:8px}
+.ai p{font-size:13px;color:#cbd5e1;margin-bottom:15px}
+
+.ai-input{
+    display:flex;
+    gap:8px;
+}
+.ai-input input{
+    flex:1;
+    padding:14px;
+    border:0;
+    border-radius:10px;
+    font-size:14px;
+}
+button{
+    border:0;
+    border-radius:10px;
+    padding:12px 18px;
+    background:#0f766e;
+    color:white;
+    cursor:pointer;
+    font-weight:bold;
+}
+.ai button{background:#14b8a6}
+
+.page{display:none}
+.page.active{display:block}
+
+.back{
+    margin-bottom:20px;
+    background:#475569;
+}
+
+.panel{
+    background:white;
+    padding:22px;
+    border-radius:16px;
+    box-shadow:0 3px 12px #00000012;
+}
+
+input,textarea,select{
+    width:100%;
+    padding:12px;
+    margin:7px 0 15px;
+    border:1px solid #d5ddda;
+    border-radius:9px;
+    font-size:14px;
+}
+textarea{min-height:120px;resize:vertical}
+
+label{
+    font-size:13px;
+    font-weight:bold;
+    color:#47514f;
+}
+
+.result{
+    margin-top:15px;
+    background:#ecfdf5;
+    border-left:4px solid #0f766e;
+    padding:15px;
+    border-radius:8px;
+    line-height:1.6;
+}
+
+.stat-grid{
+    display:grid;
+    grid-template-columns:repeat(auto-fit,minmax(150px,1fr));
+    gap:12px;
+    margin-bottom:20px;
+}
+.stat{
+    background:white;
+    padding:18px;
+    border-radius:14px;
+    box-shadow:0 2px 8px #0001;
+}
+.stat strong{display:block;font-size:25px;color:#0f766e}
+.stat span{font-size:12px;color:#64706d}
+
+table{
+    width:100%;
+    border-collapse:collapse;
+    margin-top:15px;
+}
+th,td{
+    padding:11px;
+    border-bottom:1px solid #e5e7eb;
+    text-align:left;
+    font-size:13px;
+}
+th{background:#f1f5f9}
+
+.footer{
+    text-align:center;
+    padding:30px;
+    color:#64706b;
+    font-size:12px;
+}
+
+@media(max-width:600px){
+    .container{padding:14px}
+    .grid{grid-template-columns:1fr 1fr}
+    .card{padding:15px;min-height:125px}
+    .icon{font-size:27px}
+    .card h3{font-size:15px}
+    .ai-input{flex-direction:column}
+}
+</style>
+</head>
+
+<body>
+
+<header class="header">
+    <h1>🤖 TenderMate AI</h1>
+    <p>Your Personal Tender & Business Assistant</p>
+</header>
+
+<div class="container">
+
+<!-- HOME -->
+<div id="home" class="page active">
+
+    <div class="stat-grid">
+        <div class="stat">
+            <strong id="tenderCount">0</strong>
+            <span>Tenders</span>
+        </div>
+        <div class="stat">
+            <strong id="documentCount">0</strong>
+            <span>Documents</span>
+        </div>
+        <div class="stat">
+            <strong id="workOrderCount">0</strong>
+            <span>Work Orders</span>
+        </div>
+        <div class="stat">
+            <strong id="billCount">0</strong>
+            <span>Bills</span>
+        </div>
+    </div>
+
+    <h2 class="section-title">Business Modules</h2>
+
+    <div class="grid">
+
+        <div class="card" onclick="openPage('tender')">
+            <div class="icon">📑</div>
+            <h3>Tender Analysis</h3>
+            <p>Analyse tender requirements, eligibility, quantity, dates and conditions.</p>
+        </div>
+
+        <div class="card" onclick="openPage('documents')">
+            <div class="icon">📂</div>
+            <h3>My Documents</h3>
+            <p>Store and organize your company and business documents.</p>
+        </div>
+
+        <div class="card" onclick="openPage('shortfall')">
+            <div class="icon">⚠️</div>
+            <h3>Shortfall Documents</h3>
+            <p>Compare tender requirements with your available documents.</p>
+        </div>
+
+        <div class="card" onclick="openPage('workorders')">
+            <div class="icon">📋</div>
+            <h3>Work Orders</h3>
+            <p>Maintain purchase orders and work orders.</p>
+        </div>
+
+        <div class="card" onclick="openPage('rates')">
+            <div class="icon">💰</div>
+            <h3>Rate & Quantity</h3>
+            <p>Calculate quantity, cost, rate, GST and total value.</p>
+        </div>
+
+        <div class="card" onclick="openPage('letters')">
+            <div class="icon">📝</div>
+            <h3>Letter Generator</h3>
+            <p>Generate tender and business letters.</p>
+        </div>
+
+        <div class="card" onclick="openPage('dc')">
+            <div class="icon">🚚</div>
+            <h3>DC Generator</h3>
+            <p>Create delivery challans quickly.</p>
+        </div>
+
+        <div class="card" onclick="openPage('bills')">
+            <div class="icon">🧾</div>
+            <h3>Bill Generator</h3>
+            <p>Prepare bills from work orders and supplies.</p>
+        </div>
+
+    </div>
+
+    <div class="ai">
+        <h2>🤖 Ask AI</h2>
+        <p>Ask questions about your tenders, documents, rates and business.</p>
+
+        <div class="ai-input">
+            <input id="aiQuestion"
+                   placeholder="Example: What documents are required for this tender?">
+            <button onclick="askAI()">ASK AI</button>
+        </div>
+
+        <div id="aiAnswer"></div>
+    </div>
+
+</div>
+
+
+<!-- TENDER -->
+<div id="tender" class="page">
+    <button class="back" onclick="home()">← Back</button>
+
+    <div class="panel">
+        <h2>📑 Tender Analysis</h2>
+        <p style="margin:10px 0;color:#64706b">
+            Upload or enter tender information.
+        </p>
+
+        <label>Tender Name / Number</label>
+        <input id="tenderName" placeholder="Tender No. / Name">
+
+        <label>Tender Text / Important Conditions</label>
+        <textarea id="tenderText"
+        placeholder="Paste tender conditions here..."></textarea>
+
+        <button onclick="saveTender()">Save Tender</button>
+
+        <div id="tenderResult"></div>
+    </div>
+</div>
+
+
+<!-- DOCUMENTS -->
+<div id="documents" class="page">
+    <button class="back" onclick="home()">← Back</button>
+
+    <div class="panel">
+        <h2>📂 My Documents</h2>
+        <p style="margin:10px 0;color:#64706b">
+            Your document library.
+        </p>
+
+        <label>Document Name</label>
+        <input id="docName" placeholder="Example: GST Certificate">
+
+        <label>Document Category</label>
+        <select id="docCategory">
+            <option>Company</option>
+            <option>Financial</option>
+            <option>Technical</option>
+            <option>Experience</option>
+            <option>Bank</option>
+            <option>Other</option>
+        </select>
+
+        <button onclick="saveDocument()">Add Document</button>
+
+        <div id="documentList"></div>
+    </div>
+</div>
+
+
+<!-- SHORTFALL -->
+<div id="shortfall" class="page">
+    <button class="back" onclick="home()">← Back</button>
+
+    <div class="panel">
+        <h2>⚠️ Shortfall Documents</h2>
+
+        <p style="margin:10px 0;color:#64706b">
+            Enter tender requirements. TenderMate will compare them with
+            your document library.
+        </p>
+
+        <textarea id="requirements"
+        placeholder="Enter one requirement per line:
+GST Certificate
+PAN
+Experience Certificate
+Turnover Certificate
+Affidavit"></textarea>
+
+        <button onclick="checkShortfall()">Check Documents</button>
+
+        <div id="shortfallResult"></div>
+    </div>
+</div>
+
+
+<!-- WORK ORDERS -->
+<div id="workorders" class="page">
+    <button class="back" onclick="home()">← Back</button>
+
+    <div class="panel">
+        <h2>📋 Work Orders</h2>
+
+        <label>Work Order Number</label>
+        <input id="woNumber">
+
+        <label>Buyer</label>
+        <input id="woBuyer">
+
+        <label>Quantity</label>
+        <input id="woQty" type="number">
+
+        <label>Rate</label>
+        <input id="woRate" type="number" step="0.01">
+
+        <button onclick="saveWorkOrder()">Save Work Order</button>
+
+        <div id="woList"></div>
+    </div>
+</div>
+
+
+<!-- RATES -->
+<div id="rates" class="page">
+    <button class="back" onclick="home()">← Back</button>
+
+    <div class="panel">
+        <h2>💰 Rate & Quantity Calculator</h2>
+
+        <label>Quantity</label>
+        <input id="qty" type="number" value="100000">
+
+        <label>Plant / Unit Cost (₹)</label>
+        <input id="plantCost" type="number" value="3.20" step="0.01">
+
+        <label>Transportation per unit (₹)</label>
+        <input id="transport" type="number" value="0.65" step="0.01">
+
+        <label>Other Cost per unit (₹)</label>
+        <input id="otherCost" type="number" value="0.15" step="0.01">
+
+        <label>Profit per unit (₹)</label>
+        <input id="profit" type="number" value="0.50" step="0.01">
+
+        <button onclick="calculateRate()">Calculate</button>
+
+        <div id="rateResult"></div>
+    </div>
+</div>
+
+
+<!-- LETTER -->
+<div id="letters" class="page">
+    <button class="back" onclick="home()">← Back</button>
+
+    <div class="panel">
+        <h2>📝 Letter Generator</h2>
+
+        <label>Letter Type</label>
+        <select id="letterType">
+            <option>Price Justification</option>
+            <option>Tender Clarification</option>
+            <option>Extension Request</option>
+            <option>Payment Request</option>
+            <option>Experience Certificate Request</option>
+            <option>General Representation</option>
+        </select>
+
+        <label>Details</label>
+        <textarea id="letterDetails"
+        placeholder="Enter the details of the letter..."></textarea>
+
+        <button onclick="generateLetter()">Generate Letter</button>
+
+        <div id="letterResult"></div>
+    </div>
+</div>
+
+
+<!-- DC -->
+<div id="dc" class="page">
+    <button class="back" onclick="home()">← Back</button>
+
+    <div class="panel">
+        <h2>🚚 Delivery Challan</h2>
+
+        <label>DC Number</label>
+        <input id="dcNo">
+
+        <label>Buyer</label>
+        <input id="dcBuyer">
+
+        <label>Vehicle Number</label>
+        <input id="dcVehicle">
+
+        <label>Material / Clone</label>
+        <input id="dcMaterial">
+
+        <label>Quantity</label>
+        <input id="dcQty" type="number">
+
+        <button onclick="generateDC()">Generate DC</button>
+
+        <div id="dcResult"></div>
+    </div>
+</div>
+
+
+<!-- BILLS -->
+<div id="bills" class="page">
+    <button class="back" onclick="home()">← Back</button>
+
+    <div class="panel">
+        <h2>🧾 Bill Generator</h2>
+
+        <label>Bill Number</label>
+        <input id="billNo">
+
+        <label>Buyer</label>
+        <input id="billBuyer">
+
+        <label>Quantity</label>
+        <input id="billQty" type="number">
+
+        <label>Rate</label>
+        <input id="billRate" type="number" step="0.01">
+
+        <label>GST %</label>
+        <input id="billGST" type="number" value="5">
+
+        <button onclick="generateBill()">Calculate Bill</button>
+
+        <div id="billResult"></div>
+    </div>
+</div>
+
+</div>
+
+<div class="footer">
+    TenderMate AI • Personal Tender & Business Assistant
+</div>
+
+
+<script>
+
+function openPage(id){
+    document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+    document.getElementById(id).classList.add('active');
+    window.scrollTo(0,0);
+}
+
+function home(){
+    openPage('home');
+    updateCounts();
+}
+
+function getData(key){
+    return JSON.parse(localStorage.getItem(key)||'[]');
+}
+
+function setData(key,data){
+    localStorage.setItem(key,JSON.stringify(data));
+}
+
+function saveTender(){
+
+    let data=getData('tenders');
+
+    data.push({
+        name:document.getElementById('tenderName').value,
+        text:document.getElementById('tenderText').value,
+        date:new Date().toLocaleDateString()
+    });
+
+    setData('tenders',data);
+
+    document.getElementById('tenderResult').innerHTML=
+    '<div class="result">✅ Tender saved successfully.</div>';
+
+    updateCounts();
+}
+
+
+function saveDocument(){
+
+    let data=getData('documents');
+
+    data.push({
+        name:document.getElementById('docName').value,
+        category:document.getElementById('docCategory').value
+    });
+
+    setData('documents',data);
+
+    document.getElementById('documentList').innerHTML=
+    '<div class="result">✅ Document added to My Documents.</div>';
+
+    updateCounts();
+}
+
+
+function checkShortfall(){
+
+    let requirements=document.getElementById('requirements').value
+        .split('\n')
+        .map(x=>x.trim())
+        .filter(Boolean);
+
+    let docs=getData('documents');
+
+    let html='<div class="result"><h3>Document Check</h3><table>';
+    html+='<tr><th>Requirement</th><th>Status</th></tr>';
+
+    requirements.forEach(req=>{
+
+        let found=docs.some(d=>
+            d.name.toLowerCase().includes(req.toLowerCase()) ||
+            req.toLowerCase().includes(d.name.toLowerCase())
+        );
+
+        html+=`<tr>
+            <td>${req}</td>
+            <td>${found?'✅ Available':'❌ Shortfall'}</td>
+        </tr>`;
+    });
+
+    html+='</table></div>';
+
+    document.getElementById('shortfallResult').innerHTML=html;
+}
+
+
+function saveWorkOrder(){
+
+    let data=getData('workorders');
+
+    data.push({
+        number:document.getElementById('woNumber').value,
+        buyer:document.getElementById('woBuyer').value,
+        qty:Number(document.getElementById('woQty').value),
+        rate:Number(document.getElementById('woRate').value)
+    });
+
+    setData('workorders',data);
+
+    document.getElementById('woList').innerHTML=
+    '<div class="result">✅ Work Order saved.</div>';
+
+    updateCounts();
+}
+
+
+function calculateRate(){
+
+    let qty=Number(document.getElementById('qty').value);
+    let plant=Number(document.getElementById('plantCost').value);
+    let transport=Number(document.getElementById('transport').value);
+    let other=Number(document.getElementById('otherCost').value);
+    let profit=Number(document.getElementById('profit').value);
+
+    let cost=plant+transport+other;
+    let selling=cost+profit;
+
+    document.getElementById('rateResult').innerHTML=`
+    <div class="result">
+        <b>Cost per unit:</b> ₹${cost.toFixed(2)}<br>
+        <b>Selling rate per unit:</b> ₹${selling.toFixed(2)}<br>
+        <b>Quantity:</b> ${qty.toLocaleString('en-IN')}<br>
+        <b>Total Cost:</b> ₹${(cost*qty).toLocaleString('en-IN',{maximumFractionDigits:2})}<br>
+        <b>Total Quotation Value:</b> ₹${(selling*qty).toLocaleString('en-IN',{maximumFractionDigits:2})}
+    </div>`;
+}
+
+
+function generateLetter(){
+
+    let type=document.getElementById('letterType').value;
+    let details=document.getElementById('letterDetails').value;
+
+    document.getElementById('letterResult').innerHTML=`
+    <div class="result">
+    <h3>${type}</h3>
+    <br>
+    To,<br>
+    The Concerned Officer<br><br>
+
+    <b>Subject: ${type}</b><br><br>
+
+    Sir/Madam,<br><br>
+
+    ${details}<br><br>
+
+    Thanking you,<br><br>
+    Yours faithfully,<br>
+    <b>Authorized Signatory</b>
+    </div>`;
+}
+
+
+function generateDC(){
+
+    let no=document.getElementById('dcNo').value;
+    let buyer=document.getElementById('dcBuyer').value;
+    let vehicle=document.getElementById('dcVehicle').value;
+    let material=document.getElementById('dcMaterial').value;
+    let qty=document.getElementById('dcQty').value;
+
+    document.getElementById('dcResult').innerHTML=`
+    <div class="result">
+    <h3>DELIVERY CHALLAN</h3><br>
+    <b>DC No:</b> ${no}<br>
+    <b>Buyer:</b> ${buyer}<br>
+    <b>Vehicle:</b> ${vehicle}<br>
+    <b>Material:</b> ${material}<br>
+    <b>Quantity:</b> ${qty}
+    <br><br>
+    <button onclick="window.print()">Print / Save PDF</button>
+    </div>`;
+}
+
+
+function generateBill(){
+
+    let no=document.getElementById('billNo').value;
+    let buyer=document.getElementById('billBuyer').value;
+    let qty=Number(document.getElementById('billQty').value);
+    let rate=Number(document.getElementById('billRate').value);
+    let gst=Number(document.getElementById('billGST').value);
+
+    let subtotal=qty*rate;
+    let gstAmount=subtotal*gst/100;
+    let total=subtotal+gstAmount;
+
+    let bills=getData('bills');
+
+    bills.push({no,buyer,qty,rate,total});
+
+    setData('bills',bills);
+
+    document.getElementById('billResult').innerHTML=`
+    <div class="result">
+    <b>Bill No:</b> ${no}<br>
+    <b>Buyer:</b> ${buyer}<br>
+    <b>Quantity:</b> ${qty.toLocaleString('en-IN')}<br>
+    <b>Rate:</b> ₹${rate.toFixed(2)}<br>
+    <b>Subtotal:</b> ₹${subtotal.toLocaleString('en-IN',{maximumFractionDigits:2})}<br>
+    <b>GST:</b> ₹${gstAmount.toLocaleString('en-IN',{maximumFractionDigits:2})}<br>
+    <hr>
+    <b>Total:</b> ₹${total.toLocaleString('en-IN',{maximumFractionDigits:2})}
+    <br><br>
+    <button onclick="window.print()">Print / Save PDF</button>
+    </div>`;
+
+    updateCounts();
+}
+
+
+function askAI(){
+
+    let q=document.getElementById('aiQuestion').value.toLowerCase();
+
+    let answer=
+    "TenderMate AI is ready. The local business database will be connected to this assistant in the next development phase.";
+
+    if(q.includes('document'))
+        answer="Use <b>My Documents</b> to store your certificates. Then use <b>Shortfall Documents</b> to compare them with tender requirements.";
+
+    else if(q.includes('rate'))
+        answer="Use <b>Rate & Quantity</b> to calculate plant cost, transportation, other costs, profit and total quotation value.";
+
+    else if(q.includes('tender'))
+        answer="Use <b>Tender Analysis</b> to enter the tender details. The full PDF analysis engine will be added in the next phase.";
+
+    document.getElementById('aiAnswer').innerHTML=
+        '<div style="margin-top:15px;background:#334155;padding:15px;border-radius:10px">'+
+        answer+'</div>';
+}
+
+
+function updateCounts(){
+
+    document.getElementById('tenderCount').innerText=getData('tenders').length;
+    document.getElementById('documentCount').innerText=getData('documents').length;
+    document.getElementById('workOrderCount').innerText=getData('workorders').length;
+    document.getElementById('billCount').innerText=getData('bills').length;
+}
+
+updateCounts();
+
+</script>
+
+</body>
+</html>
