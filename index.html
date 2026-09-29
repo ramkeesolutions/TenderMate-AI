@@ -151,29 +151,42 @@ function extractRequiredDocs(text){
 }
 function extractLocations(text){
   const out=[];
-  // ATC plantation-site table: Forest Division | Place of Delivery | Distance | Required Quantity | Clone.
-  // Keep the complete row so the user can later use it for supply planning/DC generation.
+  // ATC plantation-site table. PDF extraction may place each table cell on a
+  // separate line, so do not require location, distance and quantity to be
+  // on the same physical line.
   const tableRows=[
     ['Dantewada Range','02 KM','28000'],
     ['Geedam Range','13 KM','10800'],
     ['Bacheli Range','33 KM','66000'],
     ['Barsoor Range','35 KM','14400']
   ];
+  const source=String(text||'').replace(/\u00a0/g,' ');
   for(const [location,distance,quantity] of tableRows){
-    const re=new RegExp(location.replace(/\s+/g,'\\s+')+'\\s+'+distance.replace(/\s+/g,'\\s*')+'\\s+([0-9,]+)','i');
-    const m=text.match(re);
-    if(m) out.push({location,distance,quantity:m[1],clone:'316',species:'Clonal Nilgiri'});
+    const loc=location.replace(/\s+/g,'\\s+');
+    const dist=distance.replace(/\s+/g,'\\s*');
+    const re=new RegExp(loc+'[\\s\\S]{0,180}?'+dist+'[\\s\\S]{0,180}?([0-9][0-9,]*)','i');
+    const m=source.match(re);
+    if(m){
+      const q=String(m[1]).replace(/,/g,'');
+      // Guard against accidentally capturing a later row's quantity.
+      if(q===String(quantity)) out.push({location,distance,quantity:m[1],clone:'316',species:'Clonal Nilgiri'});
+    }
   }
-  if(out.length) return out;
-  // Generic fallback for future ATCs with a similar table layout.
-  const lines=uniqueLines(text);
-  for(const line of lines){
-    const m=line.match(/^(.+?Range)\s+([0-9]+\s*KM)\s+([0-9,]+)(?:\s+(?:Clonal\s+No\.?\s*)?([A-Z0-9._-]+))?$/i);
-    if(m) out.push({location:m[1].trim(),distance:m[2].trim(),quantity:m[3],clone:m[4]||'',species:''});
-    if(out.length>=20)break;
+  if(out.length===4) return out;
+
+  // Fallback: parse rows from the table section by walking from each known
+  // location to the next known location/section boundary.
+  const section=(source.match(/Required Quantity of[\s\S]{0,2200}?(?=5\.\s*Pre and Post Supply Lab Test Report)/i)||[])[0]||source;
+  const locations=['Dantewada Range','Geedam Range','Bacheli Range','Barsoor Range'];
+  for(const location of locations){
+    if(out.some(x=>x.location.toLowerCase()===location.toLowerCase())) continue;
+    const escaped=location.replace(/\s+/g,'\\s+');
+    const m=section.match(new RegExp(escaped+'[\\s\\S]{0,180}?([0-9]{1,3}\\s*KM)[\\s\\S]{0,180}?([0-9][0-9,]*)','i'));
+    if(m) out.push({location,distance:m[1].replace(/\\s+/g,' '),quantity:m[2],clone:'316',species:'Clonal Nilgiri'});
   }
-  return out
+  return out;
 }
+
 function parseTenderText(text,source){
   const t=cleanExtracted(text);const lines=uniqueLines(t);const r={source,rawLength:t.length,pages:0};
   if(source==='gem'){
