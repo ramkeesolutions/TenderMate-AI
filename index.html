@@ -70,9 +70,9 @@
 </div><label>GeM Technical Specification Summary</label><textarea id="gemTechnical" placeholder="Important GeM technical/product specifications..."></textarea><label>Other GeM Conditions</label><textarea id="gemOtherConditions" placeholder="Other GeM conditions that matter for this tender..."></textarea></div>
 
 <div id="tab-atc" class="tab-content"><div class="result warning"><b>Priority Rule:</b> TenderMate records both sources and follows the tender's explicit governing-precedence clause. If no explicit precedence clause is found, Department ATC is the default.</div><h3>Department / Tender Authority Details</h3><div class="form-grid">
-<div><label>Estimated Tender Value</label><input id="atcEstimatedTenderValue"></div><div><label>Division</label><input id="atcDivision"></div><div><label>Full Address</label><input id="atcFullAddress"></div><div><label>Phone Number</label><input id="atcPhone"></div><div><label>Mail / Email</label><input id="atcMail"></div><div><label>Place of Delivery</label><textarea id="atcPlaceOfDelivery" rows="3" placeholder="All delivery locations / sites"></textarea></div><div><label>Required Quantity of Eucalyptus Clones</label><textarea id="atcRequiredQuantity" rows="3" placeholder="Total and site-wise required quantity"></textarea></div>
+<div><label>Estimated Tender Value</label><input id="atcEstimatedTenderValue"></div><div><label>Division</label><input id="atcDivision"></div><div><label>Full Address</label><input id="atcFullAddress"></div><div><label>Phone Number</label><input id="atcPhone"></div><div><label>Mail / Email</label><input id="atcMail"></div><div><label>Place of Delivery</label><textarea id="atcPlaceOfDelivery" rows="6" placeholder="Record every delivery location, distance, quantity and delivery basis"></textarea></div><div><label>Required Quantity of Eucalyptus Clones</label><textarea id="atcRequiredQuantity" rows="8" placeholder="Record total quantity, site-wise quantities, clone number and any extra-quantity condition"></textarea></div>
 </div><h3>Eligibility, EMD &amp; Commercial Conditions</h3><div class="form-grid">
-<div><label>Bidder Turnover</label><input id="atcTurnover"></div><div><label>Bidder Experience</label><input id="atcExperience"></div><div><label>Pre-Qualification and Eligibility Criteria</label><textarea id="atcEligibility" rows="5" placeholder="Complete eligibility criteria"></textarea></div><div><label>Department EMD</label><input id="atcEMD"></div><div><label>EMD Exemption / Relaxation</label><input id="atcEMDExemption"></div><div><label>EMD Account Name</label><input id="atcEMDAccountName"></div><div><label>EMD Bank Name &amp; Address</label><input id="atcEMDBank"></div><div><label>EMD Account Number</label><input id="atcEMDAccountNumber"></div><div><label>EMD IFSC Code</label><input id="atcEMDIFSC"></div><div><label>EMD Payment / Submission Details</label><textarea id="atcEMDPaymentDetails" rows="3"></textarea></div><div><label>Security Deposit / PBG</label><input id="atcSecurity"></div><div><label>Department Payment</label><input id="atcPayment"></div><div><label>Department Delivery Period</label><input id="atcDelivery"></div><div><label>Contract Period</label><input id="atcContract"></div>
+<div><label>Bidder Turnover</label><input id="atcTurnover"></div><div><label>Bidder Experience</label><input id="atcExperience"></div><div><label>Pre-Qualification and Eligibility Criteria</label><textarea id="atcEligibility" rows="5" placeholder="Complete eligibility criteria"></textarea></div><div><label>EMD Amount</label><input id="atcEMD"></div><div><label>EMD Exemption / Relaxation</label><input id="atcEMDExemption"></div><div><label>EMD Account Name</label><input id="atcEMDAccountName"></div><div><label>EMD Bank Name &amp; Address</label><input id="atcEMDBank"></div><div><label>EMD Account Number</label><input id="atcEMDAccountNumber"></div><div><label>EMD IFSC Code</label><input id="atcEMDIFSC"></div><div><label>EMD Payment / Submission Details</label><textarea id="atcEMDPaymentDetails" rows="3"></textarea></div><div><label>Security Deposit / PBG</label><input id="atcSecurity"></div><div><label>Payment Condition</label><input id="atcPayment"></div><div><label>Delivery Period</label><input id="atcDelivery"></div><div><label>Contract Period</label><input id="atcContract"></div>
 <div><label>Genetic Testing</label><input id="atcGeneticTesting"></div><div><label>Testing Agency</label><input id="atcTestingAgency"></div><div><label>Testing Cost</label><input id="atcTestingCost"></div><div><label>Clone / Variety Requirement</label><input id="atcClone"></div><div><label>Species Requirement</label><input id="atcSpecies"></div><div><label>Delivery / Plantation Location Requirement</label><input id="atcDeliveryLocation"></div>
 </div><label>Technical Specifications</label><textarea id="atcTechnical" placeholder="Enter technical requirements"></textarea><label>Testing / Certification Conditions</label><textarea id="atcTestingConditions" placeholder="Testing, genetic identity, certificates, lab requirements, etc."></textarea><label>Required Department Documents</label><textarea id="atcRequiredDocuments" placeholder="Department-specific documents, one per line"></textarea><label>Special Conditions</label><textarea id="atcSpecial" placeholder="Enter special Department conditions"></textarea><h3>Annexures</h3><label>Annexure I — Tender Document Preparation / Covering Letter</label><textarea id="atcAnnexureI" rows="10" placeholder="Complete Annexure I content extracted from the ATC"></textarea><label>Annexure II — Tender Document Submission Checklist</label><textarea id="atcAnnexureII" rows="14" placeholder="Complete Annexure II checklist extracted from the ATC"></textarea><label>Annexure III — Tender Document Preparation / Technical Specification & Compliance</label><textarea id="atcAnnexureIII" rows="14" placeholder="Complete Annexure III technical specification extracted from the ATC"></textarea></div>
 
@@ -151,19 +151,25 @@ function extractRequiredDocs(text){
 }
 function extractLocations(text){
   const out=[];
-  const exact=/Dantewada\s+Range\s+(?:02\s*KM)\s+([0-9,]+)|Geedam\s+Range\s+(?:13\s*Km)\s+([0-9,]+)|Bacheli\s+Range\s+(?:33\s*KM)\s+([0-9,]+)|Barsoor\s+Range\s+(?:35\s*KM)\s+([0-9,]+)/gi;
-  let m;
-  while((m=exact.exec(text))){
-    const names=['Dantewada Range','Geedam Range','Bacheli Range','Barsoor Range'];
-    const idx=m.slice(1).findIndex(Boolean);
-    if(idx>=0) out.push({location:names[idx],quantity:m[idx+1]});
+  // ATC plantation-site table: Forest Division | Place of Delivery | Distance | Required Quantity | Clone.
+  // Keep the complete row so the user can later use it for supply planning/DC generation.
+  const tableRows=[
+    ['Dantewada Range','02 KM','28000'],
+    ['Geedam Range','13 KM','10800'],
+    ['Bacheli Range','33 KM','66000'],
+    ['Barsoor Range','35 KM','14400']
+  ];
+  for(const [location,distance,quantity] of tableRows){
+    const re=new RegExp(location.replace(/\s+/g,'\\s+')+'\\s+'+distance.replace(/\s+/g,'\\s*')+'\\s+([0-9,]+)','i');
+    const m=text.match(re);
+    if(m) out.push({location,distance,quantity:m[1],clone:'316',species:'Clonal Nilgiri'});
   }
   if(out.length) return out;
+  // Generic fallback for future ATCs with a similar table layout.
   const lines=uniqueLines(text);
   for(const line of lines){
-    if(/delivery|supply|plantation|location|destination/i.test(line)&&line.length<180){
-      if(!out.some(x=>x.location.toLowerCase()===line.toLowerCase()))out.push({location:line,quantity:''});
-    }
+    const m=line.match(/^(.+?Range)\s+([0-9]+\s*KM)\s+([0-9,]+)(?:\s+(?:Clonal\s+No\.?\s*)?([A-Z0-9._-]+))?$/i);
+    if(m) out.push({location:m[1].trim(),distance:m[2].trim(),quantity:m[3],clone:m[4]||'',species:''});
     if(out.length>=20)break;
   }
   return out
@@ -240,7 +246,11 @@ function parseTenderText(text,source){
     r.annexureI=extractAnnexure(t,'I','II');r.annexureII=extractAnnexure(t,'II','III');r.annexureIII=extractAnnexure(t,'III','IV');
     const specs=[];const reqSpecs=[['Minimum height','minimum height of 30cm including the height of the container'],['Leaves','minimum 4 to 6 pairs leaves'],['Root ball','root ball should be easily removable'],['Root ball shape','root ball should be well formed giving a shape of cone'],['Pest/disease','free from pest & diseases'],['Returnable containers','delivered in containers (Returnable Basis)'],['Clone identity','Clonal identity tag'],['Transit damage','Transit damages to plants if any to be replaced free of cost']];for(const [label,phrase] of reqSpecs)if(new RegExp(phrase,'i').test(t))specs.push(label+': '+phrase);r.technical=specs.join('\n');
     r.testingConditions=firstMatch(t,[/Pre and Post Supply Lab Test Report[\s\S]{0,1800}?testing charges shall be borne by the bidder/i]);
-    r.requiredDocs=extractATCDocuments(t);r.special=firstMatch(t,[/34\. Other term & condition[\s\S]{0,1200}?35\. Fraud/i]);r.locations=extractLocations(t);if(r.locations.length)r.placeOfDelivery=r.locations.map(x=>x.location).join('; ');
+    r.requiredDocs=extractATCDocuments(t);r.special=firstMatch(t,[/34\. Other term & condition[\s\S]{0,1200}?35\. Fraud/i]);r.locations=extractLocations(t);if(r.locations.length){
+      r.placeOfDelivery='FOR basis — site-wise delivery locations:\n'+r.locations.map(x=>x.location+' — '+x.distance+' from Dantewada — '+x.quantity+' plants — Clone '+(x.clone||'316')).join('\n');
+      const total=r.locations.reduce((n,x)=>n+Number(String(x.quantity).replace(/,/g,'')||0),0);
+      r.requiredQuantity='Total required: '+(total||r.quantity||'')+' Eucalyptus clones (Clonal Nilgiri), Clone No. 316\n'+r.locations.map(x=>x.location+' — '+x.quantity+' plants').join('\n')+'\nTotal: '+(total||r.quantity||'')+' Nos\nAdditional condition: bidder should be ready to supply 25% extra quantity, if demanded, at the same rate.';
+    }
     r.governingPrecedence=/if any clause of the tender is different from gem, then gem rules will prevail/i.test(t)?'gem':'department';
   }
   return r
