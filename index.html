@@ -538,8 +538,49 @@ function renderDocuments(){
  const q=(val('documentSearch')||'').toLowerCase();
  const docs=window.TenderMateDB.documents.filter(d=>!q||JSON.stringify(d).toLowerCase().includes(q));
  if(!docs.length){e.innerHTML='<div class="empty">No matching documents saved.</div>';return;}
- e.innerHTML=`<div class="table-wrap"><table><thead><tr><th>Document</th><th>Type</th><th>Number / ID</th><th>FY</th><th>Key Value</th><th>Status</th><th>Original</th><th>Actions</th></tr></thead><tbody>${docs.map(d=>`<tr><td><b>${esc(d.name)}</b><div class="mini">${esc(d.entityName||d.customer||'')}</div></td><td>${esc(d.documentType||d.category)}</td><td>${esc(d.number||d.identifier||'')}</td><td>${esc(d.financialYear||d.experienceFY||'')}</td><td>${esc(d.experienceValue||d.turnoverValue||d.quantity||'')}</td><td><span class="badge ${d.verificationStatus==='Verified'?'badge-green':'badge-orange'}">${esc(d.verificationStatus||'Needs verification')}</span>${d.verifiedDate?`<div class="mini">${esc(new Date(d.verifiedDate).toLocaleDateString())}</div>`:''}</td><td>${d.fileId?`<button class="light" onclick="openDocumentFile(${JSON.stringify(String(d.fileId))})">Open</button>`:'—'}</td><td><button class="light" onclick="editDocument(${JSON.stringify(String(d.id))})">Edit</button> ${d.verificationStatus==='Verified'?'<span class="small">✓ Verified</span>':`<button class="secondary" onclick="verifyDocument(${JSON.stringify(String(d.id))})">Verify</button>`} <button class="danger" onclick="deleteDocument(${JSON.stringify(String(d.id))})">Delete</button></td></tr>`).join('')}</tbody></table></div>`;
+ e.innerHTML=`<div class="table-wrap"><table><thead><tr><th>Document</th><th>Type</th><th>Number / ID</th><th>FY</th><th>Key Value</th><th>Status</th><th>Original</th><th>Actions</th></tr></thead><tbody>${docs.map(d=>{
+   const id=String(d.id||'');
+   const verified=d.verificationStatus==='Verified';
+   return `<tr>
+     <td><b>${esc(d.name)}</b><div class="mini">${esc(d.entityName||d.customer||'')}</div></td>
+     <td>${esc(d.documentType||d.category||'')}</td>
+     <td>${esc(d.number||d.identifier||'')}</td>
+     <td>${esc(d.financialYear||d.experienceFY||'')}</td>
+     <td>${esc(d.experienceValue||d.turnoverValue||d.quantity||'')}</td>
+     <td><span class="badge ${verified?'badge-green':'badge-orange'}">${esc(d.verificationStatus||'Needs verification')}</span>${d.verifiedDate?`<div class="mini">${esc(new Date(d.verifiedDate).toLocaleDateString())}</div>`:''}</td>
+     <td>${d.fileId?`<button type="button" class="light tm-doc-action" data-action="open" data-id="${esc(id)}">Open</button>`:'—'}</td>
+     <td>
+       <button type="button" class="light tm-doc-action" data-action="edit" data-id="${esc(id)}">Edit</button>
+       ${verified?'<span class="small">✓ Verified</span>':`<button type="button" class="secondary tm-doc-action" data-action="verify" data-id="${esc(id)}">Verify</button>`}
+       <button type="button" class="danger tm-doc-action" data-action="delete" data-id="${esc(id)}">Delete</button>
+     </td>
+   </tr>`;
+ }).join('')}</tbody></table></div>`;
+
+ // Use event delegation instead of inline onclick handlers. This is more reliable on GitHub Pages
+ // and keeps Edit/Verify working even after the table is re-rendered by search or other actions.
+ e.onclick=async function(ev){
+   const btn=ev.target.closest('.tm-doc-action');
+   if(!btn || !e.contains(btn))return;
+   ev.preventDefault();
+   ev.stopPropagation();
+   const id=btn.getAttribute('data-id');
+   const action=btn.getAttribute('data-action');
+   try{
+     if(action==='edit') editDocument(id);
+     else if(action==='verify') verifyDocument(id);
+     else if(action==='delete') deleteDocument(id);
+     else if(action==='open'){
+       const d=window.TenderMateDB.documents.find(x=>String(x.id)===String(id));
+       if(d && d.fileId) await openDocumentFile(d.fileId);
+     }
+   }catch(err){
+     console.error(err);
+     alert('TenderMate could not complete this action: '+(err.message||err));
+   }
+ };
 }
+
 function populateShortfallTenders(){const e=document.getElementById('shortfallTender');if(!e)return;e.innerHTML='<option value="">Select tender</option>'+window.TenderMateDB.tenders.map(t=>`<option value="${esc(t.id)}">${esc(t.tenderNumber)} — ${esc(t.tenderTitle)}</option>`).join('')}
 function normalizeReq(t){const out=[];(t.requiredDocumentsDetailed||[]).forEach(x=>out.push(x));(t.requiredDocuments||[]).forEach(n=>{if(!out.some(x=>x.name.toLowerCase()===n.toLowerCase()))out.push({name:n,source:'Tender record',mandatory:'Yes',notes:''})});(t.departmentATC?.requiredDocuments||[]).forEach(n=>{if(!out.some(x=>x.name.toLowerCase()===n.toLowerCase()))out.push({name:n,source:'Department ATC',mandatory:'Yes',notes:''})});return out}
 function checkShortfall(){const e=document.getElementById('shortfallResult'),id=val('shortfallTender');if(!e)return;if(!id){e.innerHTML='<div class="empty">Select a tender.</div>';return}const t=window.TenderMateDB.tenders.find(x=>x.id===id);if(!t)return;const docs=window.TenderMateDB.documents;const req=normalizeReq(t);const rows=req.map(r=>{const name=r.name.toLowerCase();const matches=docs.filter(d=>d.name.toLowerCase().includes(name)||name.includes(d.category.toLowerCase())||d.category.toLowerCase().includes(name));let status=matches.length?'Available':'Missing';if(matches.some(d=>d.expiryDate&&d.expiryDate<today()))status='Expired';return{...r,status,matches}});e.innerHTML='<div class="result"><b>'+rows.filter(x=>x.status==='Missing').length+' missing</b> · <b>'+rows.filter(x=>x.status==='Expired').length+' expired</b> · <b>'+rows.filter(x=>x.status==='Available').length+' available</b></div><div class="table-wrap"><table><thead><tr><th>Required Document</th><th>Source</th><th>Mandatory</th><th>Status</th><th>Matched</th></tr></thead><tbody>'+rows.map(r=>`<tr><td>${esc(r.name)}</td><td>${esc(r.source)}</td><td>${esc(r.mandatory)}</td><td><span class="badge ${r.status==='Available'?'badge-green':r.status==='Expired'?'badge-orange':'badge-red'}">${r.status}</span></td><td>${esc(r.matches.map(x=>x.name).join(', '))}</td></tr>`).join('')+'</tbody></table></div>'}
