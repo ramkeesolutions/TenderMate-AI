@@ -515,7 +515,22 @@ async function saveDocument(){
  else{window.TenderMateDB.documents.push(record);document.getElementById('documentResult').innerHTML='<div class="result success"><b>Document saved.</b> Structured details and the original file are stored locally. Status: Needs verification.</div>'}
  saveDB();renderDocuments();window.tmEditingDocumentId=null;const b=document.getElementById('saveDocumentBtn');if(b)b.textContent='💾 Save Document & Original File';
 }
-function editDocument(id){const d=window.TenderMateDB.documents.find(x=>x.id===id);if(!d){alert('Document record not found.');return}window.tmEditingDocumentId=id;document.getElementById('docType').value=d.category||'other';document.getElementById('docName').value=d.name||'';fillDocumentFields({...d,type:d.category});const ef=document.getElementById('experienceFields');if(ef)ef.style.display=(d.category==='experience')?'block':'none';const b=document.getElementById('saveDocumentBtn');if(b)b.textContent='💾 Update Document';document.getElementById('documentAnalysisResult').innerHTML='<div class="result warning"><b>Editing document.</b> You can change the document type and all extracted details. The original file remains stored unless you select a replacement file. Saving resets the status to Needs verification.</div>';document.getElementById('documentFields')?.scrollIntoView({behavior:'smooth',block:'start'})}
+function editDocument(id){
+ const d=window.TenderMateDB.documents.find(x=>String(x.id)===String(id));
+ if(!d){alert('Document record not found.');return}
+ openPage('documents');
+ window.tmEditingDocumentId=d.id;
+ const type=document.getElementById('docType'); if(type)type.value=d.category||'other';
+ const name=document.getElementById('docName'); if(name)name.value=d.name||'';
+ fillDocumentFields({...d,type:d.category});
+ const ef=document.getElementById('experienceFields'); if(ef)ef.style.display=(d.category==='experience')?'block':'none';
+ const b=document.getElementById('saveDocumentBtn'); if(b)b.textContent='💾 Update Document';
+ const result=document.getElementById('documentAnalysisResult');
+ if(result)result.innerHTML='<div class="result warning"><b>✏️ EDITING: '+esc(d.name||'Document')+'</b><br>You can now change the document type and all extracted details below. The original file remains stored unless you select a replacement file. Click <b>Update Document</b> after making changes.</div>';
+ const fields=document.getElementById('documentFields');
+ if(fields){fields.style.outline='3px solid #087f70';fields.style.borderRadius='12px';fields.style.padding='12px';fields.scrollIntoView({behavior:'smooth',block:'center'});setTimeout(()=>{fields.style.outline='';},2500)}
+ const first=document.getElementById('docType'); if(first)setTimeout(()=>first.focus(),400);
+}
 function verifyDocument(id){const d=window.TenderMateDB.documents.find(x=>x.id===id);if(!d)return;if(!confirm('Confirm that you have reviewed the extracted details and they are correct?'))return;d.verificationStatus='Verified';d.verifiedDate=new Date().toISOString();d.verifiedByUser=true;d.updatedDate=new Date().toISOString();saveDB();renderDocuments()}
 function renderDocuments(){
  const e=document.getElementById('documentList');
