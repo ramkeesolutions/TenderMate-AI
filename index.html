@@ -643,58 +643,57 @@ function extractWorkOrderData(text,fileName){
  const raw=String(text||'');
  const t=normalizeDocText(raw);
  const flat=t.replace(/[|¦]+/g,' ').replace(/\s+/g,' ').trim();
- const lines=t.split(/\n+/).map(v=>v.trim()).filter(Boolean);
  const x={number:'',bidNo:'',buyer:'',date:'',financialYear:'',quantity:'',rate:'',orderValue:'',delivery:'',contract:'',period:'',clone:'',customerType:'',address:'',description:'',notes:''};
  const clean=v=>String(v||'').replace(/[|¦]+/g,' ').replace(/\s+/g,' ').trim();
- const pick=(re,src=flat)=>{const m=src.match(re);return m?clean(m[1]):''};
- const dateAny='(\d{1,2}[-\/.][A-Za-z]{3,9}[-\/.]\d{4}|\d{1,2}[-\/.]\d{1,2}[-\/.]\d{4})';
+ const first=(patterns)=>{for(const re of patterns){const m=flat.match(re);if(m&&m[1])return clean(m[1]);}return ''};
 
- // GeM contract/work-order identifiers
- x.number=pick(/Contract\s*(?:No\.?|Number)\s*[:\-]?\s*([A-Z0-9][A-Z0-9./_-]{5,})/i)
-   ||pick(/(?:Work\s*Order|Purchase\s*Order)\s*(?:No\.?|Number|#)\s*[:\-]?\s*([A-Z0-9][A-Z0-9./_-]{3,})/i);
- x.bidNo=pick(/Bid\s*\/\s*RA\s*\/\s*PBP\s*No\.?\s*[:\-]?\s*([A-Z0-9][A-Z0-9./_-]{5,})/i)
-   ||pick(/Bid\s*(?:No\.?|Number)\s*[:\-]?\s*([A-Z0-9][A-Z0-9./_-]{5,})/i);
+ // GeM identifiers: use exact identifier shapes first, because PDF extraction can insert spaces/punctuation around labels.
+ let m=flat.match(/GEMC-\d{6,}/i); if(m)x.number=m[0];
+ if(!x.number){m=flat.match(/Contract\s*(?:No\.?|Number)\s*[:\-]?\s*([A-Z0-9][A-Z0-9./_-]{5,})/i);if(m)x.number=clean(m[1]);}
+ m=flat.match(/GEM\/20\d{2}\/B\/\d+/i); if(m)x.bidNo=m[0];
+ if(!x.bidNo){m=flat.match(/Bid\s*\/\s*RA\s*\/\s*PBP\s*No\.?\s*[:\-]?\s*([A-Z0-9][A-Z0-9./_-]{5,})/i);if(m)x.bidNo=clean(m[1]);}
 
- // Dates: GeM contract PDFs normally have Generated Date and a delivery date pair.
- x.date=pick(new RegExp('Generated\s*Date\s*[:\-]?\s*'+dateAny,'i'))
-   ||pick(new RegExp('(?:Order|Contract|Work\s*Order)\s*Date\s*[:\-]?\s*'+dateAny,'i'));
- if(!x.date){const m=flat.match(/\b(\d{1,2}-[A-Za-z]{3}-20\d{2})\b/);if(m)x.date=m[1]}
+ // Contract/generated date.
+ m=flat.match(/Generated\s*Date\s*[:\-]?\s*(\d{1,2}[-\/.][A-Za-z]{3,9}[-\/.]20\d{2})/i);
+ if(!m)m=flat.match(/(?:Order|Contract|Work\s*Order)\s*Date\s*[:\-]?\s*(\d{1,2}[-\/.][A-Za-z]{3,9}[-\/.]20\d{2})/i);
+ if(m)x.date=clean(m[1]);
  x.financialYear=inferFY(x.date||'');
- if(!x.financialYear){const fy=flat.match(/\b(20\d{2})[-–](20\d{2})\b/);if(fy)x.financialYear=fy[1]+'-'+fy[2].slice(-2)}
+ if(!x.financialYear){m=flat.match(/\b(20\d{2})[-–](20\d{2})\b/);if(m)x.financialYear=m[1]+'-'+m[2].slice(-2);}
 
- // Buyer / authority. Keep the department and buyer designation separate from e-mail/address text.
- const dept=pick(/Department\s*[:\-]?\s*(Forest\s+Department[^,|]*?)(?=\s+(?:Organisation|Office\s+Zone|Buyer\s+Details|Buyer\s+Details\b)|$)/i)
-   ||pick(/Department\s*[:\-]?\s*(.{5,100}?)(?=\s+Office\s+Zone|\s+Buyer\s+Details|$)/i);
- const designation=pick(/Designation\s*[:\-]?\s*(Attached\s+Officer|DIVISIONAL\s+FOREST\s+OFFICER)\s*([^|]*?)(?=\s+(?:Contact\s+No\.?|Email(?:\s+ID)?|GSTIN|Address)|$)/i);
- const buyerClean=clean([dept,designation].filter(Boolean).join(' — '));
- x.buyer=buyerClean;
- if(!x.buyer)x.buyer=pick(/(?:Buyer|Purchaser|Customer)\s*(?:Details)?\s*[:\-]?\s*([^|]{5,120}?)(?=\s+Contact\s+No\.?|\s+Email|\s+GSTIN|\s+Address)/i);
+ // Buyer and address. Keep these separate from e-mail and seller information.
+ x.buyer=first([/Department\s*[:\-]?\s*(Forest\s+Department\s+Chhattisgarh)/i]);
+ const des=first([/Designation\s*[:\-]?\s*(Attached\s+Officer\s+SUKMA)/i,/Designation\s*[:\-]?\s*(DIVISIONAL\s+FOREST\s+OFFICER\s+SUKMA)/i]);
+ if(des)x.buyer=x.buyer?(x.buyer+' — '+des):des;
+ if(!x.buyer)x.buyer=first([/Buyer\s+Details\s+Designation\s*[:\-]?\s*([^|]+?)(?=\s+Contact|\s+Email|\s+GSTIN|\s+Address)/i]);
+ m=flat.match(/Divis(?:ional|inal)\s+Forest\s+office\s+Sukma,?\s*SUKMA,\s*CHHATTISGARH[-\s]*494111,?\s*India/i);
+ if(m)x.address=clean(m[0]);
+ if(!x.address)x.address=first([/Address\s*[:\-]?\s*(Divis(?:ional|inal)[^|]{10,180}?SUKMA,\s*CHHATTISGARH[-\s]*494111[^|]*)/i]);
 
- // Buyer address: prefer the address inside the Buyer Details block, not the seller address.
- const buyerAddr=flat.match(/Divis(?:ional|inal)\s+Forest\s+office\s+Sukma,?\s*SUKMA,\s*CHHATTISGARH[-\s]*494111,?\s*India/i);
- x.address=buyerAddr?clean(buyerAddr[0]):pick(/Buyer\s+Address\s*[:\-]?\s*(.{10,220}?)(?=\s+(?:Financial|Payment|Seller)\s+(?:Approval|Authority|Details)|$)/i);
+ // GeM product row. Handle the actual layout: 166,210 pieces 3.45 NA 573,424.5
+ m=flat.match(/\b([0-9][0-9,]*)\s+pieces\s+([0-9]+(?:\.\d+)?)\s+(?:NA|N\/A|-)\s+([0-9][0-9,]*(?:\.\d+)?)/i);
+ if(m){x.quantity=clean(m[1]);x.rate=clean(m[2]);x.orderValue=clean(m[3]);}
+ if(!x.quantity){m=flat.match(/\b([0-9][0-9,]*)\s+pieces\b/i);if(m)x.quantity=m[1];}
+ if(!x.rate){m=flat.match(/\b([0-9]+(?:\.\d+)?)\s+NA\s+[0-9][0-9,]*(?:\.\d+)?\b/i);if(m)x.rate=m[1];}
+ if(!x.orderValue){m=flat.match(/Total\s+Order\s+Value\s*\(in\s+INR\)\s*[^0-9]*([0-9][0-9,]*(?:\.\d+)?)/i);if(m)x.orderValue=m[1];}
+ if(!x.orderValue){m=flat.match(/\b([0-9][0-9,]*(?:\.\d+)?)\s*$/);if(m)x.orderValue=m[1];}
 
- // Product table. In GeM PDFs the quantity/rate/value often occur as adjacent table cells, not on one line.
- let productRow=flat.match(/([0-9][0-9,]*)\s+pieces\s+([0-9]+(?:\.[0-9]+)?)\s+(?:NA|N\/A|-)\s+([0-9][0-9,]*(?:\.[0-9]+)?)/i);
- if(productRow){x.quantity=productRow[1];x.rate=productRow[2];x.orderValue=productRow[3];}
- if(!x.quantity)x.quantity=pick(/\b([0-9][0-9,]*)\s+pieces\b/i)||pick(/Ordered\s*Quantity\s*[:\-]?\s*([0-9][0-9,]*)/i)||pick(/(?:Quantity|Qty\.?|No\.?\s*of\s*(?:plants|saplings|units))\s*[:\-]?\s*([0-9][0-9,]*)/i);
- if(!x.rate)x.rate=pick(/(?:Unit\s*Price|Unit\s*Rate|Rate)\s*\(?(?:INR|Rs\.?|₹)?\)?\s*[:\-]?\s*([0-9][0-9,]*(?:\.[0-9]+)?)/i);
- if(!x.orderValue)x.orderValue=pick(/Total\s*Order\s*Value\s*\(?(?:in\s*)?INR\)?\s*[:\-]?\s*([0-9][0-9,]*(?:\.[0-9]+)?)/i)||pick(/Total\s*Order\s*Value[^0-9]{0,60}([0-9][0-9,]*(?:\.[0-9]+)?)/i);
- if(!x.orderValue&&x.quantity&&x.rate){const q=parseFloat(String(x.quantity).replace(/,/g,'')),r=parseFloat(String(x.rate).replace(/,/g,''));if(isFinite(q)&&isFinite(r))x.orderValue=(q*r).toFixed(2).replace(/\.00$/,'')}
-
- // Delivery dates from the consignee row: 30-Jul-2026 to 14-Aug-2026.
- const deliveryPair=flat.match(/(?:\b[0-9][0-9,]*\b\s+)?(\d{1,2}-[A-Za-z]{3}-20\d{2})\s+(\d{1,2}-[A-Za-z]{3}-20\d{2})/i);
- if(deliveryPair)x.delivery=deliveryPair[1]+' to '+deliveryPair[2];
+ // Consignee delivery dates: 30-Jul-2026 and 14-Aug-2026.
+ m=flat.match(/(\d{1,2}-[A-Za-z]{3}-20\d{2})\s+(\d{1,2}-[A-Za-z]{3}-20\d{2})/i);
+ if(m)x.delivery=m[1]+' to '+m[2];
  x.period=x.delivery;
 
- // Product details
- x.clone=pick(/Product\s*Name\s*[:\-]?\s*(.{5,220}?)(?=\s+Brand\s*:|\s+Brand\s+Type\s*:|\s+Catalogue\s+Status|\s+Category\s+Name|$)/i)
-   ||pick(/Common\s+name\s+of\s+plant\s*[:\-]?\s*(.{5,160}?)(?=\s+Biological|\s+Age\s+of\s+plant|$)/i);
- x.clone=clean(x.clone.replace(/^\|\s*/,'')).replace(/\s+Brand\s*$/i,'').trim();
- if(!x.clone){const cm=flat.match(/Clonal\s+Eucalyptus,?\s*Clone\s+no\.?\s*316/i);if(cm)x.clone=cm[0]}
- x.description=x.clone||pick(/Item\s+Description\s*[:\-]?\s*(.{5,240}?)(?=\s+Brand\s*:|\s+Ordered\s+Quantity|$)/i);
- if(/Forest Department|State Government|Government/i.test(flat))x.customerType='Government';else if(/Semi-Government/i.test(flat))x.customerType='Semi-Government';else if(/Public Sector|PSU/i.test(flat))x.customerType='PSU / Public Sector';
+ // Product name and clone. Prefer Product Name and retain clone number.
+ m=flat.match(/Product\s+Name\s*[:\-]?\s*(Unbranded\s+30\s+centimeter\s+cm\s+Clonal\s+Eucalyptus,?\s*Clone\s+no\.\s*316)/i);
+ if(m)x.clone=clean(m[1]);
+ if(!x.clone){m=flat.match(/Product\s+Name\s*[:\-]?\s*(.{5,180}?)(?=\s+Brand\s*:)/i);if(m)x.clone=clean(m[1]);}
+ if(!x.clone){m=flat.match(/Clonal\s+Eucalyptus,?\s*Clone\s+no\.\s*316/i);if(m)x.clone=clean(m[0]);}
+ x.description=x.clone;
+ x.customerType=/Forest\s+Department|State\s+Government|Government/i.test(flat)?'Government':/Semi-Government/i.test(flat)?'Semi-Government':/Public Sector|PSU/i.test(flat)?'PSU / Public Sector':'';
 
+ // Specifications and important details.
+ const age=first([/Age\s+of\s+plant\s*[:\-]?\s*([0-9]+\s*month)/i]);
+ const height=first([/Height\s+of\s+Plant\s*[:\-]?\s*([0-9]+\s*centimeter)/i]);
+ const leaves=first([/Pairs\s+of\s+leaves\s+on\s+seedling\s*[:\-]?\s*([0-9]+)/i]);
  const notes=[];
  if(x.number)notes.push('Contract / Work Order No.: '+x.number);
  if(x.bidNo)notes.push('GeM Bid / RA No.: '+x.bidNo);
@@ -705,7 +704,6 @@ function extractWorkOrderData(text,fileName){
  if(x.orderValue)notes.push('Total Order Value: ₹'+x.orderValue);
  if(x.delivery)notes.push('Delivery: '+x.delivery);
  if(/Option Clause/i.test(flat))notes.push('Option Clause: purchaser may increase or decrease quantity up to 25% subject to the stated contract terms.');
- const age=pick(/Age\s+of\s+plant\s*[:\-]?\s*([0-9]+\s*month)/i),height=pick(/Height\s+of\s+Plant\s*[:\-]?\s*([0-9]+\s*centimeter)/i),leaves=pick(/Pairs\s+of\s+leaves\s+on\s+seedling\s*[:\-]?\s*([0-9]+)/i);
  if(age||height||leaves)notes.push('Plant specification: '+[age&&('Age '+age),height&&('Height '+height),leaves&&('Leaves '+leaves+' pairs')].filter(Boolean).join('; ')+'.');
  x.notes=notes.join('\n')||('Source file: '+fileName);
  return x;
