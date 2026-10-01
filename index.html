@@ -486,7 +486,7 @@ if(type==='partnership'){
   x.notes=details.join('\n');
 }
 if(!x.notes)x.notes=`Source file: ${fileName}`;if(!x.financialYear&&x.issueDate)x.financialYear=inferFY(x.issueDate);return x}
-function fillDocumentFields(x){for(const [id,v] of Object.entries({docNumber:x.number,docIssueDate:toDateInput(x.issueDate),docExpiryDate:toDateInput(x.expiryDate),docAuthority:x.authority,docEntityName:x.entityName,docIdentifier:x.identifier,docFinancialYear:x.financialYear,docAssessmentYear:x.assessmentYear,docTurnoverValue:x.turnoverValue,docQuantity:x.quantity,docCustomer:x.customer,docCustomerType:x.customerType,docDescription:x.description,docExperienceFY:x.experienceFY||x.financialYear,docExperienceValue:x.experienceValue||x.turnoverValue,docExperienceQuantity:x.experienceQuantity||x.quantity,docExperiencePeriod:x.experiencePeriod,docExperienceClone:x.experienceClone,docNotes:x.notes}))if(document.getElementById(id))document.getElementById(id).value=v||'';const ef=document.getElementById('experienceFields');if(ef)ef.style.display=(x.type==='experience')?'block':'none'}
+function fillDocumentFields(x){for(const [id,v] of Object.entries({docNumber:x.number,docIssueDate:toDateInput(x.issueDate),docExpiryDate:toDateInput(x.expiryDate),docAuthority:x.authority,docEntityName:x.entityName,docIdentifier:x.identifier,docFinancialYear:x.financialYear,docAssessmentYear:x.assessmentYear,docTurnoverValue:x.turnoverValue,docQuantity:x.quantity,docCustomer:x.customer,docCustomerType:x.customerType,docDescription:x.description,docExperienceFY:x.experienceFY||x.financialYear,docExperienceValue:x.experienceValue||x.turnoverValue,docExperienceQuantity:x.experienceQuantity||x.quantity,docExperiencePeriod:x.experiencePeriod,docExperienceClone:x.experienceClone,docEvidenceType:x.evidenceType,docNotes:x.notes}))if(document.getElementById(id))document.getElementById(id).value=v||'';const ef=document.getElementById('experienceFields');if(ef)ef.style.display=(x.type==='experience')?'block':'none'}
 function toDateInput(v){if(!v)return'';const m=String(v).match(/(\d{1,2})[./-](\d{1,2})[./-](\d{4})/);return m?`${m[3]}-${String(m[2]).padStart(2,'0')}-${String(m[1]).padStart(2,'0')}`:''}
 function clearDocumentAnalysis(){tmPendingDocument={file:null,text:'',pages:0,extracted:{}};window.tmEditingDocumentId=null;document.getElementById('documentAnalysisResult').innerHTML='';['docUploadFile','docName','docNumber','docIssueDate','docExpiryDate','docAuthority','docEntityName','docIdentifier','docFinancialYear','docAssessmentYear','docTurnoverValue','docQuantity','docCustomer','docCustomerType','docDescription','docExperienceFY','docExperienceValue','docExperienceQuantity','docExperiencePeriod','docExperienceClone','docNotes'].forEach(id=>{const e=document.getElementById(id);if(e)e.value=''});document.getElementById('docType').value='auto';const ef=document.getElementById('experienceFields');if(ef)ef.style.display='none';const b=document.getElementById('saveDocumentBtn');if(b)b.textContent='💾 Save Document & Original File'}
 async function saveDocument(){
@@ -515,6 +515,48 @@ async function saveDocument(){
  else{window.TenderMateDB.documents.push(record);document.getElementById('documentResult').innerHTML='<div class="result success"><b>Document saved.</b> Structured details and the original file are stored locally. Status: Needs verification.</div>'}
  saveDB();renderDocuments();window.tmEditingDocumentId=null;const b=document.getElementById('saveDocumentBtn');if(b)b.textContent='💾 Save Document & Original File';
 }
+async function openDocumentFile(fileId){
+  if(!fileId){alert('No original file is stored for this document.');return}
+  const db=await tmDocOpen();
+  const item=await new Promise((resolve,reject)=>{
+    const tx=db.transaction('files','readonly');
+    const req=tx.objectStore('files').get(fileId);
+    req.onsuccess=()=>resolve(req.result||null);
+    req.onerror=()=>reject(req.error||new Error('Could not read the stored document.'));
+  });
+  db.close();
+  if(!item || !item.blob){
+    alert('The original file could not be found in this browser. The document record is still safe.');
+    return;
+  }
+  const url=URL.createObjectURL(item.blob);
+  const w=window.open(url,'_blank');
+  if(!w){
+    const a=document.createElement('a');a.href=url;a.target='_blank';a.rel='noopener';a.click();
+  }
+  setTimeout(()=>URL.revokeObjectURL(url),60000);
+}
+async function deleteDocument(id){
+  const d=window.TenderMateDB.documents.find(x=>String(x.id)===String(id));
+  if(!d){alert('Document record not found.');return}
+  if(!confirm('Delete "'+(d.name||'this document')+'" from TenderMate? The original stored file will also be removed.'))return;
+  if(d.fileId){
+    try{
+      const db=await tmDocOpen();
+      await new Promise((resolve,reject)=>{
+        const tx=db.transaction('files','readwrite');
+        tx.objectStore('files').delete(d.fileId);
+        tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error);
+      });
+      db.close();
+    }catch(err){console.warn('Original file removal failed:',err)}
+  }
+  window.TenderMateDB.documents=window.TenderMateDB.documents.filter(x=>String(x.id)!==String(id));
+  saveDB();
+  if(window.tmEditingDocumentId && String(window.tmEditingDocumentId)===String(id))clearDocumentAnalysis();
+  renderDocuments();
+}
+
 function editDocument(id){
  const d=window.TenderMateDB.documents.find(x=>String(x.id)===String(id));
  if(!d){alert('Document record not found.');return}
