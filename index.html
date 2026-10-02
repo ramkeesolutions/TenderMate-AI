@@ -14,6 +14,11 @@
 .rate-register .division-cell{white-space:normal;min-width:125px;max-width:180px;}
 .rate-register .gem-cell{white-space:normal;min-width:170px;}
 .rate-register .status-cell{min-width:125px;}
+.rate-register .number-cell{text-align:right;font-variant-numeric:tabular-nums;}
+.rate-register .money-cell{text-align:right;min-width:125px;font-variant-numeric:tabular-nums;}
+.rate-register th{text-align:center;}
+.rate-register td{padding:10px 12px;}
+.rate-register .money-cell,.rate-register .number-cell{white-space:nowrap;}
 .rate-register .muted{color:#667085;}
 
 </style>
@@ -510,7 +515,8 @@ function findTenderByGemId(gemId){
   if(!id)return null;
   return window.TenderMateDB.tenders.find(t=>String(t.tenderNumber||'').trim().toLowerCase()===id)||null;
 }
-function numericMoney(v){const n=Number(String(v??'').replace(/[,₹Rs.\s]/gi,''));return Number.isFinite(n)?n:0}
+function numericMoney(v){let s=String(v??'').trim();s=s.replace(/₹/g,'').replace(/,/g,'').replace(/^Rs\.?\s*/i,'').replace(/\s+/g,'');const n=Number(s);return Number.isFinite(n)?n:0}
+function numericNumber(v){let s=String(v??'').trim().replace(/,/g,'').replace(/₹/g,'').replace(/\s+/g,'');const n=Number(s);return Number.isFinite(n)?n:0}
 function calculateTenderFinancials(contractValue,tender){
   const contract=numericMoney(contractValue); const t=tender||{}; const atc=t.departmentATC||{}; const g=t.gemConditions||{};
   const estimated=numericMoney(atc.estimatedTenderValue||g.estimatedBidValue||g.estimatedValue);
@@ -779,8 +785,8 @@ function renderRates(){
   const rows=window.TenderMateDB.workOrders||[];
   if(!rows.length){e.innerHTML='<div class="empty">No work orders available for the Rate &amp; Quantity Register.</div>';return}
   const html=`<div class="table-wrap rate-register"><table><thead><tr><th>Division</th><th>GeM ID</th><th>Quantity</th><th>Rate</th><th>Contract Value</th><th>Estimated Amount</th><th>EMD Amount</th><th>EMD Status</th><th>APS Amount</th><th>APS Status</th><th>SD Amount</th><th>SD Status</th></tr></thead><tbody>${rows.map(w=>{
-    const gemId=w.tenderId||w.gemId||w.bidRaNo||''; const tender=findTenderByGemId(gemId); const fin=calculateTenderFinancials(w.orderValue,tender); const div=tenderDivision(tender)||normalizeDivisionName(w.division||w.buyer||'')||'—'; const apsStatus=w.apsStatus||(fin.apsApplicable?'Not Paid':'Not Applicable'); const emdStatus=w.emdStatus||(fin.emd?'Not Paid':'Not Applicable'); const sdStatus=w.sdStatus||(fin.sd>0?'Not Paid':'Not Applicable');
-    return `<tr><td class="division-cell">${esc(div)}</td><td class="gem-cell">${gemId?`<b>${esc(gemId)}</b><div class="mini">${tender?'✓ Linked':'⚠ Tender not linked'}</div>`:'—'}</td><td>${esc(w.quantity||'—')}</td><td>${esc(w.rate||'—')}</td><td>₹${finNum(w.orderValue)}</td><td>${fin.estimated?'₹'+finNum(fin.estimated):'—'}</td><td>${fin.emd?'₹'+finNum(fin.emd):'—'}</td><td class="status-cell"><select class="status-select" onchange="updateRateStatus('${esc(w.id)}','emdStatus',this.value)">${statusOptions(emdStatus)}</select></td><td>${fin.apsApplicable?'₹'+finNum(fin.aps):'—'}</td><td class="status-cell"><select class="status-select" onchange="updateRateStatus('${esc(w.id)}','apsStatus',this.value)">${statusOptions(apsStatus)}</select></td><td>${fin.sd>0?'₹'+finNum(fin.sd):'—'}</td><td class="status-cell"><select class="status-select" onchange="updateRateStatus('${esc(w.id)}','sdStatus',this.value)">${statusOptions(sdStatus)}</select></td></tr>`;
+    const gemId=w.tenderId||w.gemId||w.bidRaNo||''; const tender=findTenderByGemId(gemId); const qty=numericNumber(w.quantity); const rate=numericNumber(w.rate); const calculatedContract=(qty>0&&rate>0)?qty*rate:numericMoney(w.orderValue); const fin=calculateTenderFinancials(calculatedContract,tender); const div=tenderDivision(tender)||normalizeDivisionName(w.division||w.buyer||'')||'—'; const apsStatus=w.apsStatus||(fin.apsApplicable?'Not Paid':'Not Applicable'); const emdStatus=w.emdStatus||(fin.emd?'Not Paid':'Not Applicable'); const sdStatus=w.sdStatus||(fin.sd>0?'Not Paid':'Not Applicable');
+    return `<tr><td class="division-cell">${esc(div)}</td><td class="gem-cell">${gemId?`<b>${esc(gemId)}</b><div class="mini">${tender?'✓ Linked':'⚠ Tender not linked'}</div>`:'—'}</td><td class="number-cell">${qty>0?qty.toLocaleString('en-IN'):'—'}</td><td class="number-cell">${rate>0?rate.toFixed(2):'—'}</td><td class="money-cell">₹${finNum(calculatedContract)}</td><td>${fin.estimated?'₹'+finNum(fin.estimated):'—'}</td><td>${fin.emd?'₹'+finNum(fin.emd):'—'}</td><td class="status-cell"><select class="status-select" onchange="updateRateStatus('${esc(w.id)}','emdStatus',this.value)">${statusOptions(emdStatus)}</select></td><td>${fin.apsApplicable?'₹'+finNum(fin.aps):'—'}</td><td class="status-cell"><select class="status-select" onchange="updateRateStatus('${esc(w.id)}','apsStatus',this.value)">${statusOptions(apsStatus)}</select></td><td>${fin.sd>0?'₹'+finNum(fin.sd):'—'}</td><td class="status-cell"><select class="status-select" onchange="updateRateStatus('${esc(w.id)}','sdStatus',this.value)">${statusOptions(sdStatus)}</select></td></tr>`;
   }).join('')}</tbody></table></div>`;
   e.innerHTML=html;
 }
