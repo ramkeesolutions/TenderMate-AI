@@ -1013,26 +1013,89 @@ function dashboardStatusForTender(tender,field){
   return status||defaultStatus;
 }
 function renderDashboard(){
-  const db=window.TenderMateDB||{}; const tenders=Array.isArray(db.tenders)?db.tenders:[]; const workOrders=Array.isArray(db.workOrders)?db.workOrders:[];
-  const awardedKeys=new Set(); let contract=0, plants=0, sd=0, aps=0, sdReleased=0, apsReleased=0;
+  const db=window.TenderMateDB||{};
+  const tenders=Array.isArray(db.tenders)?db.tenders:[];
+  const workOrders=Array.isArray(db.workOrders)?db.workOrders:[];
+  const awardedKeys=new Set();
+  let contract=0, plants=0, sd=0, aps=0, sdReleased=0, apsReleased=0;
+
+  // Work orders are the source for awarded tenders, contract value, plants,
+  // SD and APS. A tender is awarded when a work order exists for it.
   workOrders.forEach(w=>{
-    const qty=numericNumber(w.quantity); const rate=numericNumber(w.rate); const value=numericMoney(w.orderValue)||(qty>0&&rate>0?qty*rate:0);
-    contract+=value; plants+=qty;
-    const tender=dashboardTenderForWorkOrder(w); const key=tender?dashboardTenderKey(tender):(normalizeGemId(getWorkOrderGemId(w))||String(w.tenderId||w.tenderGemId||w.id));
+    const qty=numericNumber(w.quantity);
+    const rate=numericNumber(w.rate);
+    const value=numericMoney(w.orderValue)||(qty>0&&rate>0?qty*rate:0);
+    contract+=value;
+    plants+=qty;
+
+    const tender=dashboardTenderForWorkOrder(w);
+    const gemId=normalizeGemId(getWorkOrderGemId(w)||w.tenderGemId||w.tenderId||'');
+    const key=tender?dashboardTenderKey(tender):(gemId||String(w.tenderId||w.id));
     if(key)awardedKeys.add(key);
+
     const fin=calculateTenderFinancials(value,tender,qty);
-    sd+=fin.sd||0; aps+=fin.aps||0;
+    sd+=fin.sd||0;
+    aps+=fin.aps||0;
     if(String(w.sdStatus||'')==='Returned')sdReleased+=fin.sd||0;
     if(String(w.apsStatus||'')==='Returned')apsReleased+=fin.aps||0;
   });
-  let emd=0,emdReleased=0;
+
+  // EMD is a tender-level amount. Prefer the saved tender/ATC EMD and use
+  // the work-order/rate-register status when a tender is linked. This also
+  // handles older/unlinked work orders by using their GeM ID and status.
+  let emd=0, emdReleased=0;
+  const matchedWorkOrderIds=new Set();
   tenders.forEach(t=>{
-    const qty=numericNumber(t?.quantity?.total||t?.gemConditions?.totalQuantity||t?.departmentATC?.requiredQuantity); const fin=calculateTenderFinancials(0,t,qty); emd+=fin.emd||0;
-    if(dashboardStatusForTender(t,'emdStatus')==='Returned')emdReleased+=fin.emd||0;
+    const qty=numericNumber(t?.quantity?.total||t?.gemConditions?.totalQuantity||t?.departmentATC?.requiredQuantity);
+    const fin=calculateTenderFinancials(0,t,qty);
+    const amount=fin.emd||0;
+    emd+=amount;
+
+    const tenderKey=dashboardTenderKey(t);
+    const related=workOrders.filter(w=>{
+      const wt=dashboardTenderForWorkOrder(w);
+      if(wt && dashboardTenderKey(wt)===tenderKey){matchedWorkOrderIds.add(String(w.id));return true;}
+      const wg=normalizeGemId(getWorkOrderGemId(w)||w.tenderGemId||w.tenderId||'');
+      return !!wg && wg===tenderKey;
+    });
+    related.forEach(w=>matchedWorkOrderIds.add(String(w.id)));
+
+    // A returned EMD in either the tender record or linked Rate & Quantity
+    // record counts as released.
+    const status=dashboardStatusForTender(t,'emdStatus');
+    const linkedReturned=related.some(w=>String(w.emdStatus||'')==='Returned');
+    if(status==='Returned' || linkedReturned)emdReleased+=amount;
   });
+
+  // Some existing Rate & Quantity records may pre-date their Tender record
+  // or may not be linked. Include their EMD once, using the same financial
+  // calculation, so a Returned status is reflected on the dashboard.
+  workOrders.forEach(w=>{
+    if(matchedWorkOrderIds.has(String(w.id)))return;
+    const gemId=normalizeGemId(getWorkOrderGemId(w)||w.tenderGemId||w.tenderId||'');
+    if(!gemId)return;
+    const tender=findTenderByGemId(gemId);
+    if(tender)return;
+    const qty=numericNumber(w.quantity);
+    const value=numericMoney(w.orderValue)||(qty>0&&numericNumber(w.rate)>0?qty*numericNumber(w.rate):0);
+    const fin=calculateTenderFinancials(value,null,qty);
+    emd+=fin.emd||0;
+    if(String(w.emdStatus||'')==='Returned')emdReleased+=fin.emd||0;
+  });
+
   const avgRate=plants>0?contract/plants:0;
   const set=(id,value)=>{const e=document.getElementById(id);if(e)e.textContent=value};
-  set('dashTenders',tenders.length.toLocaleString('en-IN')); set('dashAwarded',awardedKeys.size.toLocaleString('en-IN')); set('dashContract',dashboardMoney(contract)); set('dashPlants',dashboardQty(plants)); set('dashAvgRate','₹'+avgRate.toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2})); set('dashEmd',dashboardMoney(emd)); set('dashEmdReleased','Released: '+dashboardMoney(emdReleased)); set('dashSd',dashboardMoney(sd)); set('dashSdReleased','Released: '+dashboardMoney(sdReleased)); set('dashAps',dashboardMoney(aps)); set('dashApsReleased','Released: '+dashboardMoney(apsReleased));
+  set('dashTenders',tenders.length.toLocaleString('en-IN'));
+  set('dashAwarded',awardedKeys.size.toLocaleString('en-IN'));
+  set('dashContract',dashboardMoney(contract));
+  set('dashPlants',dashboardQty(plants));
+  set('dashAvgRate','₹'+avgRate.toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2}));
+  set('dashEmd',dashboardMoney(emd));
+  set('dashEmdReleased','Released: '+dashboardMoney(emdReleased));
+  set('dashSd',dashboardMoney(sd));
+  set('dashSdReleased','Released: '+dashboardMoney(sdReleased));
+  set('dashAps',dashboardMoney(aps));
+  set('dashApsReleased','Released: '+dashboardMoney(apsReleased));
 }
 
 function letterLabel(type){return({emd_release:'EMD Release Letter',sd_release:'Security Deposit Release Letter',experience:'Experience Certificate / Letter',price_justification:'Price Justification Letter',tender_submission:'Tender Submission / Covering Letter',payment_request:'Payment Request Letter',general:'General Tender Letter'})[type]||type||'General Tender Letter'}
