@@ -522,11 +522,30 @@ function findTenderByGemId(gemId){
   if(!id)return null;
   return (window.TenderMateDB.tenders||[]).find(t=>normalizeGemId(t.tenderNumber)===id)||null;
 }
+function getWorkOrderGemId(w){
+  const direct=[w?.tenderId,w?.gemId,w?.bidRaNo,w?.tenderNumber,w?.gemBidNo,w?.gemBidRaNo,w?.bidNo,w?.notes,w?.description,w?.buyer,w?.address].filter(Boolean).join(' ');
+  const directMatch=direct.match(/GEM\s*\/\s*\d{4}\s*\/\s*B\s*\/\s*\d+/i);
+  if(directMatch)return directMatch[0].replace(/\s+/g,'').toUpperCase();
+  try{
+    const seen=new Set();
+    const scan=value=>{
+      if(value==null)return '';
+      if(typeof value==='string'){
+        const m=value.match(/GEM\s*\/\s*\d{4}\s*\/\s*B\s*\/\s*\d+/i);
+        return m?m[0].replace(/\s+/g,'').toUpperCase():'';
+      }
+      if(typeof value!=='object'||seen.has(value))return '';
+      seen.add(value);
+      for(const key of Object.keys(value)){const found=scan(value[key]);if(found)return found;}
+      return '';
+    };
+    return scan(w);
+  }catch(e){return ''}
+}
 function findTenderForWorkOrder(w){
   const tenders=window.TenderMateDB.tenders||[];
-  const explicit=[w?.tenderId,w?.gemId,w?.bidRaNo,w?.notes].filter(Boolean).join(' ');
-  const idMatch=explicit.match(/GEM\/\d{4}\/B\/\d+/i);
-  if(idMatch){const t=findTenderByGemId(idMatch[0]);if(t)return t;}
+  const workOrderGemId=getWorkOrderGemId(w);
+  if(workOrderGemId){const t=findTenderByGemId(workOrderGemId);if(t)return t;}
   const q=numericNumber(w?.quantity);
   const buyer=String(w?.buyer||'').toLowerCase();
   const address=String(w?.address||'').toLowerCase();
@@ -895,7 +914,7 @@ function renderRates(){
   if(!rows.length){e.innerHTML='<div class="empty">No work orders available for the Rate &amp; Quantity Register.</div>';return}
   const html=`<div class="table-wrap rate-register"><table><thead><tr><th>Division</th><th>GeM ID</th><th>Quantity</th><th>Rate</th><th>Contract Value</th><th>Estimated Amount</th><th>EMD Amount</th><th>EMD Status</th><th>APS Amount</th><th>APS Status</th><th>SD Amount</th><th>SD Status</th></tr></thead><tbody>${rows.map(w=>{
     const tender=findTenderForWorkOrder(w);
-    const tenderGemId=tender?.tenderNumber||w.tenderId||w.gemId||w.bidRaNo||'';
+    const tenderGemId=tender?.tenderNumber||getWorkOrderGemId(w)||'';
     const qty=numericNumber(w.quantity);
     const rate=numericNumber(w.rate);
     const calculatedContract=(qty>0&&rate>0)?qty*rate:numericMoney(w.orderValue);
