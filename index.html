@@ -1055,7 +1055,27 @@ function letterTenderDate(t){return t?.tenderDate||t?.basicInformation?.tenderDa
 function letterWorkOrdersForTender(t){const gem=normalizeGemId(letterTenderGem(t));if(!gem)return[];return (window.TenderMateDB.workOrders||[]).filter(w=>normalizeGemId(getWorkOrderGemId(w))===gem)}
 function letterWorkOrderDivision(w,t){return normalizeDivisionName(w?.division||w?.officeDivision||letterTenderDivision(t)||'')}
 function letterRecipientFromRecords(t,w){const buyer=w?.buyer||letterTenderBuyer(t)||'';const addr=w?.address||letterTenderAddress(t)||'';return buyer+(addr?'\n'+addr:'')}
-function letterFinancialYear(t){return workOrderTenderYear(t)||t?.financialYear||t?.basicInformation?.financialYear||t?.tenderYear||''}
+function letterFinancialYear(t){
+  const direct=[workOrderTenderYear(t),t?.financialYear,t?.basicInformation?.financialYear,t?.tenderYear,t?.departmentATC?.financialYear,t?.departmentATC?.fy,t?.gemConditions?.financialYear,t?.gemConditions?.fy];
+  for(const v of direct){const m=String(v||'').match(/20\d{2}\s*[-–/]\s*\d{2}/);if(m)return m[0].replace(/\s+/g,'').replace('–','-').replace('/','-')}
+  try{
+    const seen=new Set();
+    const scan=v=>{if(v==null)return '';if(typeof v==='string'){const m=v.match(/20\d{2}\s*[-–/]\s*\d{2}/);return m?m[0].replace(/\s+/g,'').replace('–','-').replace('/','-'):''}if(typeof v!=='object'||seen.has(v))return '';seen.add(v);for(const k of Object.keys(v)){const r=scan(v[k]);if(r)return r}return ''};
+    return scan(t)||'';
+  }catch(e){return ''}
+}
+function letterDivisionKey(v){return String(v||'').toUpperCase().replace(/\b(CHHATTISGARH|C\.?G\.?|INDIA|FOREST|DEPARTMENT|OFFICE|DFO|CIRCLE|DIVISION|RANGE)\b/g,'').replace(/[^A-Z0-9]/g,'').trim()}
+function letterTenderDivisionCandidates(t){
+  const vals=[t?.division,t?.officeDivision,t?.basicInformation?.officeDivision,t?.departmentATC?.division,t?.atcDivision,t?.gemConditions?.officeName];
+  const out=[];vals.forEach(v=>{const n=normalizeDivisionName(v||'');if(n&&!out.includes(n))out.push(n)});
+  letterWorkOrdersForTender(t).forEach(w=>{const n=normalizeDivisionName(w?.division||w?.officeDivision||'');if(n&&!out.includes(n))out.push(n)});
+  return out;
+}
+function letterTenderMatchesDivision(t,d){
+  if(!d)return true;
+  const target=letterDivisionKey(d);if(!target)return true;
+  return letterTenderDivisionCandidates(t).some(v=>letterDivisionKey(v)===target || letterDivisionKey(v).includes(target) || target.includes(letterDivisionKey(v)));
+}
 function populateLetterYears(selected){
  const sel=document.getElementById('letterFY');if(!sel)return;
  const vals=[];const add=v=>{v=String(v||'').trim();if(v&&!vals.includes(v))vals.push(v)};
@@ -1070,8 +1090,13 @@ function populateLetterYears(selected){
 function populateLetterIntegration(selected){
  const y=val('letterFY'),d=val('letterDivision'),sel=document.getElementById('letterIntegration');if(!sel)return;
  const cur=selected||val('letterIntegration');
- const rows=(window.TenderMateDB.tenders||[]).filter(t=>(!y||letterFinancialYear(t)===y)&&(!d||letterTenderDivision(t)===d));
- sel.innerHTML='<option value="">— Select integrated tender —</option>'+rows.map(t=>{const linked=letterWorkOrdersForTender(t);const gem=letterTenderGem(t);return `<option value="${esc(t.id)}">${esc(gem||'Tender')} — ${esc(letterTenderTitle(t))}${linked.length?' — '+linked.length+' Work Order'+(linked.length>1?'s':''):''}</option>`}).join('');
+ let rows=(window.TenderMateDB.tenders||[]).filter(t=>(!y||letterFinancialYear(t)===y)&&letterTenderMatchesDivision(t,d));
+ // If the selected division came from a Work Order and the Tender's ATC division was not extracted,
+ // keep the tender visible when a Work Order with the same GeM ID belongs to that division.
+ if(!rows.length&&d){
+   rows=(window.TenderMateDB.tenders||[]).filter(t=>!y||letterFinancialYear(t)===y).filter(t=>letterWorkOrdersForTender(t).some(w=>letterDivisionKey(w?.division||w?.officeDivision)===letterDivisionKey(d)));
+ }
+ sel.innerHTML='<option value="">— Select integrated tender —</option>'+rows.map(t=>{const linked=letterWorkOrdersForTender(t);const gem=letterTenderGem(t);const sources=[];if(t.sourceDocuments?.gemDocument||t.originalFiles?.gem) sources.push('GeM');if(t.sourceDocuments?.departmentATC||t.originalFiles?.departmentATC) sources.push('ATC');if(linked.length)sources.push(linked.length+' WO');return `<option value="${esc(t.id)}">${esc(gem||'Tender')} — ${esc(letterTenderTitle(t))}${sources.length?' — '+esc(sources.join(' + ')):''}</option>`}).join('');
  if(cur&&rows.some(t=>String(t.id)===String(cur)))sel.value=cur;else if(rows.length===1)sel.value=rows[0].id;
 }
 function renderLetterIntegrationInfo(t){const e=document.getElementById('letterIntegrationInfo');if(!e)return;if(!t){e.innerHTML='Select Financial Year → Division → Tender. The saved GeM document, Department ATC and matching Work Order are then loaded.';return}const gem=t.sourceDocuments?.gemDocument||t.originalFiles?.gem||'';const atc=t.sourceDocuments?.departmentATC||t.originalFiles?.departmentATC||'';const wos=letterWorkOrdersForTender(t);const items=[['GeM Document',gem||'Not stored / not specified',gem?'ok':'warn'],['Department ATC',atc||'Not stored / not specified',atc?'ok':'warn'],['Work Order',wos.length?wos.map(w=>w.fileName||w.number||'Work Order').join(', '):'No linked Work Order',wos.length?'ok':'warn']];e.innerHTML=`<div class="letter-integration-title">${esc(letterTenderGem(t)||'Tender')} — ${esc(letterTenderTitle(t))}</div><div class="letter-source-grid">${items.map(x=>`<div class="letter-source-item ${x[2]}"><strong>${esc(x[0])}</strong>${esc(x[1])}</div>`).join('')}</div><div class="small" style="margin-top:10px">Integration key: GeM ID. The saved Tender record supplies the GeM + Department ATC structured data, and matching Work Orders are linked by the same GeM ID.</div>`}
@@ -1079,7 +1104,7 @@ function setLetterWorkOrderForDivision(){const t=getLetterTender(),wos=letterWor
 function populateLetterDivisions(selected){
  const y=val('letterFY'),sel=document.getElementById('letterDivision');if(!sel)return;
  const vals=[];const add=v=>{v=normalizeDivisionName(v||'');if(v&&!vals.includes(v))vals.push(v)};
- (window.TenderMateDB.tenders||[]).filter(t=>!y||letterFinancialYear(t)===y).forEach(t=>add(letterTenderDivision(t)));
+ (window.TenderMateDB.tenders||[]).filter(t=>!y||letterFinancialYear(t)===y).forEach(t=>letterTenderDivisionCandidates(t).forEach(add));
  (window.TenderMateDB.workOrders||[]).filter(w=>!y||String(w?.financialYear||'')===y).forEach(w=>add(w?.division||w?.officeDivision));
  const cur=selected||val('letterDivision');
  sel.innerHTML='<option value="">— Select Division —</option>'+vals.sort((a,b)=>a.localeCompare(b)).map(v=>`<option value="${esc(v)}">${esc(v)}</option>`).join('');
