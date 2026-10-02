@@ -641,7 +641,24 @@ if(type==='partnership'){
 }
 if(!x.notes)x.notes=`Source file: ${fileName}`;if(!x.financialYear&&x.issueDate)x.financialYear=inferFY(x.issueDate);return x}
 function fillDocumentFields(x){for(const [id,v] of Object.entries({docNumber:x.number,docIssueDate:toDateInput(x.issueDate),docExpiryDate:toDateInput(x.expiryDate),docAuthority:x.authority,docEntityName:x.entityName,docIdentifier:x.identifier,docFinancialYear:x.financialYear,docAssessmentYear:x.assessmentYear,docTurnoverValue:x.turnoverValue,docQuantity:x.quantity,docCustomer:x.customer,docCustomerType:x.customerType,docDescription:x.description,docExperienceFY:x.experienceFY||x.financialYear,docExperienceValue:x.experienceValue||x.turnoverValue,docExperienceQuantity:x.experienceQuantity||x.quantity,docExperiencePeriod:x.experiencePeriod,docExperienceClone:x.experienceClone,docEvidenceType:x.evidenceType,docNotes:x.notes}))if(document.getElementById(id))document.getElementById(id).value=v||'';const ef=document.getElementById('experienceFields');if(ef)ef.style.display=(x.type==='experience')?'block':'none'}
-function toDateInput(v){if(!v)return'';const m=String(v).match(/(\d{1,2})[./-](\d{1,2})[./-](\d{4})/);return m?`${m[3]}-${String(m[2]).padStart(2,'0')}-${String(m[1]).padStart(2,'0')}`:''}
+function toDateInput(v){
+ if(!v)return'';
+ const s=String(v).trim();
+ if(/^\d{4}-\d{2}-\d{2}$/.test(s))return s;
+ let m=s.match(/(\d{1,2})[./-](\d{1,2})[./-](\d{4})/);
+ if(m)return `${m[3]}-${String(m[2]).padStart(2,'0')}-${String(m[1]).padStart(2,'0')}`;
+ m=s.match(/(\d{1,2})[-\s](Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*[-\s](\d{4})/i);
+ if(m){
+  const months={jan:'01',feb:'02',mar:'03',apr:'04',may:'05',jun:'06',jul:'07',aug:'08',sep:'09',oct:'10',nov:'11',dec:'12'};
+  return `${m[3]}-${months[m[2].slice(0,3).toLowerCase()]}-${String(m[1]).padStart(2,'0')}`;
+ }
+ m=s.match(/(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*[\s-]+(\d{1,2})[\s,.-]+(\d{4})/i);
+ if(m){
+  const months={jan:'01',feb:'02',mar:'03',apr:'04',may:'05',jun:'06',jul:'07',aug:'08',sep:'09',oct:'10',nov:'11',dec:'12'};
+  return `${m[3]}-${months[m[1].slice(0,3).toLowerCase()]}-${String(m[2]).padStart(2,'0')}`;
+ }
+ return '';
+}
 function clearDocumentAnalysis(){tmPendingDocument={file:null,text:'',pages:0,extracted:{}};window.tmEditingDocumentId=null;document.getElementById('documentAnalysisResult').innerHTML='';['docUploadFile','docName','docNumber','docIssueDate','docExpiryDate','docAuthority','docEntityName','docIdentifier','docFinancialYear','docAssessmentYear','docTurnoverValue','docQuantity','docCustomer','docCustomerType','docDescription','docExperienceFY','docExperienceValue','docExperienceQuantity','docExperiencePeriod','docExperienceClone','docNotes'].forEach(id=>{const e=document.getElementById(id);if(e)e.value=''});document.getElementById('docType').value='auto';const ef=document.getElementById('experienceFields');if(ef)ef.style.display='none';const b=document.getElementById('saveDocumentBtn');if(b)b.textContent='💾 Save Document & Original File'}
 async function saveDocument(){
  const f=document.getElementById('docUploadFile')?.files?.[0];
