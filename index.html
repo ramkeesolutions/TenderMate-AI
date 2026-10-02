@@ -1390,47 +1390,242 @@ function aiStatusQuestion(field,q){
  if(desired)rows=rows.filter(r=>r.status===desired);
  return {rows,division,desired};
 }
+function aiNormalizeQuery(q){
+  return String(q||'').toLowerCase().replace(/[₹,]/g,' ').replace(/\s+/g,' ').trim();
+}
+function aiExtractGemId(q){
+  const m=String(q||'').match(/gem\s*\/\s*\d{4}\s*\/\s*b\s*\/\s*\d+/i);
+  return m?normalizeGemId(m[0]):'';
+}
+function aiExtractFY(q){
+  const m=String(q||'').match(/\b(20\d{2})\s*[-–]\s*(\d{2}|20\d{2})\b/i);
+  if(!m)return '';
+  return m[2].length===2?`${m[1]}-${m[2]}`:`${m[1]}-${m[2].slice(-2)}`;
+}
+function aiNormalizeStatus(q){
+  const l=aiNormalizeQuery(q);
+  if(/release letter required/.test(l))return 'Release Letter Required';
+  if(/\b(returned|released)\b/.test(l))return 'Returned';
+  if(/\bpaid\b/.test(l))return 'Paid';
+  if(/\bnot paid\b|\bunpaid\b|\bpending payment\b/.test(l))return 'Not Paid';
+  return '';
+}
+function aiExtractInstrument(q){
+  const all=aiExtractInstruments(q);
+  return all[0]||'';
+}
+function aiExtractInstruments(q){
+  const l=aiNormalizeQuery(q), out=[];
+  if(/\b(emd|earnest money|earnest deposit)\b/.test(l))out.push('emd');
+  if(/\b(sd|security deposit|security)\b/.test(l))out.push('sd');
+  if(/\b(aps|additional performance security|advance performance security)\b/.test(l))out.push('aps');
+  return out;
+}
+function aiExtractDivision(q){
+  const l=aiNormalizeQuery(q);
+  const db=window.TenderMateDB||{};
+  const candidates=[];
+  (db.tenders||[]).forEach(t=>candidates.push(tenderDivision(t),t?.basicInformation?.officeDivision,t?.departmentATC?.division,t?.gemConditions?.officeName));
+  (db.workOrders||[]).forEach(w=>candidates.push(w?.division,w?.officeDivision,w?.buyer));
+  const clean=v=>String(v||'').replace(/\s+/g,' ').trim();
+  const unique=[...new Set(candidates.filter(Boolean).map(clean))];
+  const tokens=l.replace(/[^a-z0-9]+/g,' ').split(/\s+/).filter(Boolean);
+  const stop=new Set(['show','list','which','what','where','tell','about','tender','tenders','work','order','orders','rate','plant','plants','amount','total','give','details','for','the','my','is','are','was','were','with','paid','pay','payment','status','released','release','returned','return','required','applicable','not','all','and','or','of','in','on','has','have','do','does','did','emd','earnest','money','sd','security','deposit','aps','additional','performance','advance','price','per','contract','value','financial','year','fy','this','that','me','i','am','how','much','many','tendered','participated','awarded','won','without','no','yet','issued','blocked','pending','divisions','division']);
+  const wanted=tokens.filter(x=>x.length>2&&!stop.has(x));
+  let best='',score=-1;
+  unique.forEach(v=>{
+    const vl=v.toLowerCase();
+    const sc=wanted.reduce((n,w)=>n+(vl.includes(w)?1:0),0);
+    if(sc>score){score=sc;best=v;}
+  });
+  return score>0?best:'';
+}
+function aiTenderRows(){
+  const db=window.TenderMateDB||{};
+  const ts=Array.isArray(db.tenders)?db.tenders:[];
+  return ts.map(t=>{
+    const workOrders=aiWorkOrderForTender(t);
+    const fin=aiTenderFinancial(t);
+    const statuses={emd:aiFinancialStatus('emd',t),sd:aiFinancialStatus('sd',t),aps:aiFinancialStatus('aps',t)};
+    return {t,workOrders,fin,statuses,awarded:workOrders.length>0,fy:tenderFinancialYear(t),division:tenderDivision(t)||t?.basicInformation?.officeDivision||t?.departmentATC?.division||''};
+  });
+}
+function aiFilterRows(rows,q){
+  const l=aiNormalizeQuery(q), gem=aiExtractGemId(q), fy=aiExtractFY(q), div=aiExtractDivision(q);
+  let out=rows.slice();
+  if(gem)out=out.filter(r=>normalizeGemId(r.t.tenderNumber)===gem);
+  if(fy)out=out.filter(r=>String(r.fy||'').toLowerCase()===fy.toLowerCase());
+  if(div){
+    const dwords=String(div).toLowerCase().replace(/[^a-z0-9]+/g,' ').split(/\s+/).filter(x=>x.length>2&&!['division','forest','office','circle','department','dfo'].includes(x));
+    out=out.filter(r=>{
+      const hay=[r.division,r.t?.basicInformation?.officeDivision,r.t?.departmentATC?.division,...r.workOrders.map(w=>w?.division||w?.officeDivision||'')].join(' ').toLowerCase();
+      return dwords.length?dwords.some(w=>hay.includes(w)):true;
+    });
+  }
+  return {rows:out,gem,fy,div};
+}
+function aiInstrumentStatus(r,instrument){return r.statuses[instrument]||'Not Paid';}
+function aiInstrumentAmount(r,instrument){return instrument==='emd'?numericMoney(r.fin.emd):instrument==='sd'?numericMoney(r.fin.sd):numericMoney(r.fin.aps);}
+function aiRowsForInstrument(rows,instrument,status){
+  return rows.filter(r=>{
+    const amount=aiInstrumentAmount(r,instrument);
+    if(instrument==='aps' && !r.fin.apsApplicable && amount<=0)return false;
+    if(instrument==='sd' && !r.awarded && amount<=0)return false;
+    if(status && aiInstrumentStatus(r,instrument)!==status)return false;
+    return amount>0;
+  });
+}
+function aiMoneyLine(instrument){return instrument==='emd'?'EMD':instrument==='sd'?'SD':'APS';}
+function aiStatusBadge(status){const cls=status==='Paid'?'badge-blue':status==='Returned'?'badge-green':status==='Release Letter Required'?'badge-orange':'badge-orange';return `<span class="badge ${cls}">${esc(status)}</span>`;}
+function aiFinancialAnswer(rows,instrument,status,questionMeta){
+  const label=aiMoneyLine(instrument);
+  const matched=aiRowsForInstrument(rows,instrument,status);
+  const total=matched.reduce((s,r)=>s+aiInstrumentAmount(r,instrument),0);
+  if(!matched.length)return `<div class="result warning">No ${esc(label)} records matched${questionMeta||''}.</div>`;
+  const title=status?`${label} — ${status}`:`${label} records`;
+  const body=matched.map(r=>`${esc(r.division||'—')} — <b>${esc(r.t.tenderNumber||'—')}</b> — ${esc(aiMoney(aiInstrumentAmount(r,instrument)))} — ${aiStatusBadge(aiInstrumentStatus(r,instrument))}`).join('<br>');
+  return `<div class="result"><b>${esc(title)}:</b> ${matched.length} record(s)<br>${body}<hr><b>Total:</b> ${esc(aiMoney(total))}</div>`;
+}
+function aiBuildSummary(rows){
+  const awarded=rows.filter(r=>r.awarded);
+  const contract=awarded.reduce((s,r)=>s+r.workOrders.reduce((x,w)=>x+(numericMoney(w.orderValue)||(numericNumber(w.quantity)*numericNumber(w.rate))),0),0);
+  const plants=awarded.reduce((s,r)=>s+r.workOrders.reduce((x,w)=>x+numericNumber(w.quantity),0),0);
+  const emd=rows.reduce((s,r)=>s+numericMoney(r.fin.emd),0);
+  const emdReleased=rows.filter(r=>r.statuses.emd==='Returned').reduce((s,r)=>s+numericMoney(r.fin.emd),0);
+  const sd=awarded.reduce((s,r)=>s+numericMoney(r.fin.sd),0);
+  const sdReleased=awarded.filter(r=>r.statuses.sd==='Returned').reduce((s,r)=>s+numericMoney(r.fin.sd),0);
+  const aps=awarded.reduce((s,r)=>s+numericMoney(r.fin.aps),0);
+  const apsReleased=awarded.filter(r=>r.statuses.aps==='Returned').reduce((s,r)=>s+numericMoney(r.fin.aps),0);
+  return {participated:rows.length,awarded:awarded.length,notAwarded:rows.filter(r=>!r.awarded).length,contract,plants,avgRate:plants?contract/plants:0,emd,emdReleased,sd,sdReleased,aps,apsReleased};
+}
+function aiRenderTenderList(rows,title){
+  if(!rows.length)return '<div class="result warning">No matching tenders found.</div>';
+  return `<div class="result"><b>${esc(title)}</b> — ${rows.length}</div>`+rows.map(r=>aiTenderCard(r.t)).join('');
+}
+function aiQueryEngine(q){
+  const l=aiNormalizeQuery(q);
+  const rows=aiTenderRows();
+  const filtered=aiFilterRows(rows,q);
+  const r=filtered.rows;
+  const instruments=aiExtractInstruments(q);
+  const instrument=instruments[0]||'';
+  const status=aiNormalizeStatus(q);
+  const gem=filtered.gem;
+  const hasTenderScope=!!(gem||filtered.fy||filtered.div);
+  const wantsAwarded=/\b(awarded|won|work order issued|with work order)\b/.test(l);
+  const wantsNoWO=/\b(no work order|without work order|not awarded|unawarded|lost|did not get)\b/.test(l);
+
+  // Multi-instrument financial questions are answered together from the same tender-led register.
+  if(instruments.length>1){
+    const targetBase=wantsAwarded?r.filter(x=>x.awarded):wantsNoWO?r.filter(x=>!x.awarded):r;
+    const lines=instruments.map(ins=>{
+      let target=targetBase;
+      if(status)target=aiRowsForInstrument(target,ins,status);
+      if(/\bblocked\b/.test(l))target=aiRowsForInstrument(target,ins,'Paid');
+      if(/\bpending\b/.test(l))target=target.filter(x=>['Not Paid','Release Letter Required'].includes(aiInstrumentStatus(x,ins)));
+      const total=target.reduce((s,x)=>s+aiInstrumentAmount(x,ins),0);
+      return `<b>${esc(aiMoneyLine(ins))}:</b> ${esc(aiMoney(total))} (${target.length} record(s))`;
+    }).join('<br>');
+    return `<div class="result"><b>Financial summary${wantsAwarded?' — Awarded tenders':wantsNoWO?' — Tenders without Work Order':''}${status?' — '+esc(status):''}:</b><br>${lines}</div>`;
+  }
+
+  // Explicit financial questions always use the tender-led financial register.
+  if(instrument){
+    if(/\b(total|sum|how much|amount|blocked|paid|returned|released|pending|status|show|which|what|is|are|did|have)\b/.test(l)){
+      let target=r;
+      if(wantsAwarded)target=target.filter(x=>x.awarded);
+      if(wantsNoWO)target=target.filter(x=>!x.awarded);
+      if(status)target=aiRowsForInstrument(target,instrument,status);
+      if(/\bblocked\b/.test(l))target=aiRowsForInstrument(target,instrument,'Paid');
+      if(/\bpending\b/.test(l))target=target.filter(x=>['Not Paid','Release Letter Required'].includes(aiInstrumentStatus(x,instrument)));
+      if(/\b(is|did|has)\b/.test(l) && hasTenderScope && target.length===1 && status){
+        const x=target[0];
+        return `<div class="result"><b>${esc(x.division||'Tender')} ${esc(aiMoneyLine(instrument))}:</b> ${esc(aiMoney(aiInstrumentAmount(x,instrument)))} — ${aiStatusBadge(aiInstrumentStatus(x,instrument))}<br><span class="mini">${esc(x.t.tenderNumber||'')}</span></div>`;
+      }
+      const title=status?`${aiMoneyLine(instrument)} — ${status}`:/\bblocked\b/.test(l)?`${aiMoneyLine(instrument)} currently blocked`:/\bpending\b/.test(l)?`${aiMoneyLine(instrument)} pending`:`${aiMoneyLine(instrument)} status`;
+      if(!target.length)return `<div class="result warning">No ${esc(aiMoneyLine(instrument))} records matched the question.</div>`;
+      const total=target.reduce((s,x)=>s+aiInstrumentAmount(x,instrument),0);
+      const lines=target.map(x=>`${esc(x.division||'—')} — <b>${esc(x.t.tenderNumber||'—')}</b> — ${esc(aiMoney(aiInstrumentAmount(x,instrument)))} — ${aiStatusBadge(aiInstrumentStatus(x,instrument))}`).join('<br>');
+      return `<div class="result"><b>${esc(title)}:</b> ${target.length} record(s)<br>${lines}<hr><b>Total:</b> ${esc(aiMoney(total))}</div>`;
+    }
+  }
+
+  // Business summary / dashboard questions.
+  if(/\b(how many|count|number of|total tenders|tenders participated|participated)\b/.test(l) && /\btender/.test(l)){
+    const s=aiBuildSummary(r); return `<div class="result"><b>Total tenders participated:</b> ${s.participated}<br><b>Awarded:</b> ${s.awarded}<br><b>Without Work Order:</b> ${s.notAwarded}</div>`;
+  }
+  if(/\b(awarded|won|work order issued)\b/.test(l) && /\b(how many|count|number|show|list|which|what|my)\b/.test(l)){
+    const x=r.filter(a=>a.awarded); return aiRenderTenderList(x,'Awarded tenders — Work Order issued');
+  }
+  if(/\b(no work order|without work order|not awarded|unawarded|lost|did not get)\b/.test(l)){
+    const x=r.filter(a=>!a.awarded); return aiRenderTenderList(x,'Participated tenders without a Work Order');
+  }
+  if(/\b(open|active) tenders?\b/.test(l)){
+    const x=r.filter(a=>{const st=String(a.t.basicInformation?.status||a.t.workflowStage||'').toLowerCase();return st==='open'||st.includes('published')||st.includes('bid preparation')||st.includes('submitted')||st.includes('evaluation')});
+    return aiRenderTenderList(x,'Open / active tenders');
+  }
+  if(/\b(total contract|contract amount|contract value)\b/.test(l)){
+    const s=aiBuildSummary(r);return `<div class="result"><b>Total contract amount:</b> ${esc(aiMoney(s.contract))}<br><b>Total plants:</b> ${esc(aiQty(s.plants))}<br><b>Average rate per plant:</b> ${esc(aiMoney(s.avgRate))}<br><span class="mini">Source: awarded Work Orders linked to the selected tender records.</span></div>`;
+  }
+  if(/\b(average rate|avg rate|rate per plant|average price)\b/.test(l)){
+    const s=aiBuildSummary(r);return `<div class="result"><b>Average rate per plant:</b> ${esc(aiMoney(s.avgRate))}<br>Total contract value: ${esc(aiMoney(s.contract))}<br>Total plants: ${esc(aiQty(s.plants))}</div>`;
+  }
+  if(/\b(total plants|total quantity|plants awarded|quantity awarded)\b/.test(l)){
+    const s=aiBuildSummary(r);return `<div class="result"><b>Total plants:</b> ${esc(aiQty(s.plants))}<br>Awarded tenders: ${s.awarded}</div>`;
+  }
+  if(/\b(compare|comparison)\b/.test(l)){
+    const divisions=[...new Set(r.map(x=>x.division).filter(Boolean))];
+    if(divisions.length<2)return '<div class="result warning">Please mention two or more divisions or tenders to compare.</div>';
+    const lines=divisions.slice(0,6).map(d=>{const x=r.filter(a=>a.division===d);const s=aiBuildSummary(x);return `<tr><td>${esc(d)}</td><td>${s.participated}</td><td>${s.awarded}</td><td>${esc(aiQty(s.plants))}</td><td>${esc(aiMoney(s.contract))}</td><td>${esc(aiMoney(s.avgRate))}</td></tr>`}).join('');
+    return `<div class="result"><b>Division comparison</b><div class="table-wrap"><table><thead><tr><th>Division</th><th>Tenders</th><th>Awarded</th><th>Plants</th><th>Contract</th><th>Avg Rate</th></tr></thead><tbody>${lines}</tbody></table></div></div>`;
+  }
+  if(/\b(work orders?|orders issued)\b/.test(l)){
+    const w=(r.flatMap(x=>x.workOrders));
+    if(!w.length)return '<div class="result warning">No matching Work Orders found.</div>';
+    return `<div class="result"><b>Work Orders:</b> ${w.length}</div>`+w.map(x=>`<div class="final-card"><strong>${esc(getWorkOrderGemId(x)||'—')}</strong><br>Work Order: ${esc(x.number||'—')}<br>Division: ${esc(x.division||x.officeDivision||'—')} · FY: ${esc(x.financialYear||'—')}<br>Quantity: ${esc(aiQty(x.quantity))} · Rate: ${esc(numericMoney(x.rate).toFixed(2))} · Contract: ${esc(aiMoney(x.orderValue))}</div>`).join('');
+  }
+  if(/\b(required documents?|documents required|what documents)\b/.test(l)){
+    const x=r;if(!x.length)return '<div class="result warning">No matching tender found.</div>';
+    return x.map(a=>{const req=normalizeReq(a.t);return `<div class="final-card"><strong>${esc(a.t.tenderNumber)}</strong> — Required documents (${req.length})<br>${req.length?req.map(z=>`• ${esc(z.name)} <span class="source-tag">${esc(z.source||'Tender')}</span>`).join('<br>'):'No structured document requirements stored.'}</div>`}).join('');
+  }
+  if(/\b(deadline|closing date|bid end|opening date|important dates?)\b/.test(l)){
+    if(!r.length)return '<div class="result warning">No matching tender found.</div>';
+    return r.map(a=>`<div class="final-card"><strong>${esc(a.t.tenderNumber)}</strong><br>Tender date: ${esc(aiDate(a.t.basicInformation?.tenderDate))}<br>Bid closing: ${esc(aiDate(a.t.basicInformation?.bidClosingDate||a.t.gemConditions?.bidEndDateTime))}<br>Bid opening: ${esc(aiDate(a.t.basicInformation?.bidOpeningDate||a.t.gemConditions?.bidOpeningDateTime))}<br>Validity: ${esc(a.t.basicInformation?.bidValidity||'—')}</div>`).join('');
+  }
+  if(/\b(buyer|consignee|address|contact)\b/.test(l)){
+    if(!r.length)return '<div class="result warning">No matching tender found.</div>';
+    return r.map(a=>`<div class="final-card"><strong>${esc(a.t.tenderNumber)}</strong><br>Buyer: ${esc(a.t.basicInformation?.buyer||a.t.gemConditions?.consigneeOfficer||'—')}<br>Address: ${esc(a.t.basicInformation?.buyerAddress||a.t.departmentATC?.fullAddress||a.t.gemConditions?.consigneeAddress||'—')}<br>Email: ${esc(a.t.gemConditions?.buyerEmail||a.t.departmentATC?.mail||'—')}</div>`).join('');
+  }
+  if(/\b(experience|turnover|eligibility|pre.?qualification|qualification)\b/.test(l)){
+    if(!r.length)return '<div class="result warning">No matching tender found.</div>';
+    return r.map(a=>`<div class="final-card"><strong>${esc(a.t.tenderNumber)}</strong><br>Turnover: ${esc(a.t.departmentATC?.turnover||a.t.gemConditions?.turnover||'—')}<br>Experience: ${esc(a.t.departmentATC?.experience||a.t.gemConditions?.experience||'—')}<br>Eligibility: ${esc((a.t.departmentATC?.eligibility||[]).join(' | ')||'—')}</div>`).join('');
+  }
+  if(/\b(delivery|payment|contract period|delivery period)\b/.test(l)){
+    if(!r.length)return '<div class="result warning">No matching tender found.</div>';
+    return r.map(a=>`<div class="final-card"><strong>${esc(a.t.tenderNumber)}</strong><br>Delivery: ${esc(a.t.departmentATC?.delivery||a.t.gemConditions?.deliveryPeriod||'—')}<br>Payment: ${esc(a.t.departmentATC?.payment||a.t.gemConditions?.payment||'—')}<br>Contract period: ${esc(a.t.departmentATC?.contract||a.t.gemConditions?.contractPeriod||'—')}</div>`).join('');
+  }
+  if(/\b(location|locations|where.*supply|delivery points)\b/.test(l)){
+    if(!r.length)return '<div class="result warning">No matching tender found.</div>';
+    return r.map(a=>{const loc=a.t.quantity?.locations||[];return `<div class="final-card"><strong>${esc(a.t.tenderNumber)}</strong><br>${loc.length?loc.map(z=>`• ${esc(z.location||z.name||z.area||'Location')} — ${esc(z.quantity||z.qty||'')} ${esc(z.unit||'')}`).join('<br>'):esc(a.t.departmentATC?.placeOfDelivery||a.t.departmentATC?.deliveryLocation||a.t.gemConditions?.consigneeAddress||'No structured locations stored.')}</div>`}).join('');
+  }
+  if(/\b(atc|governing rule|precedence|which rule)\b/.test(l)){
+    if(!r.length)return '<div class="result warning">No matching tender found.</div>';
+    return r.map(a=>`<div class="final-card"><strong>${esc(a.t.tenderNumber)}</strong><br>Governing rule: <b>${esc(a.t.governingPrecedence==='gem'?'GeM':'Department ATC')}</b><br>${esc(a.t.governingPrecedenceReason||'Department ATC is the default unless the tender explicitly states otherwise.')}</div>`).join('');
+  }
+  if(/\b(emd|sd|aps|financial|estimated)\b/.test(l)){
+    if(!r.length)return '<div class="result warning">No matching tender found.</div>';
+    return r.map(a=>aiTenderCard(a.t)).join('');
+  }
+  if(/\b(help|what can you ask|examples)\b/.test(l)){
+    return '<div class="result"><b>Ask TenderMate:</b><br>• How many tenders did I participate in?<br>• Which tenders were awarded?<br>• Which tenders have no Work Order?<br>• How much EMD is paid, returned or blocked?<br>• Which divisions have paid EMD / SD / APS?<br>• What is my total contract value and average rate?<br>• Show work orders for a division or FY.<br>• What documents are required?<br>• What are the closing dates?<br>• Show tender delivery locations.</div>';
+  }
+  return '<div class="result warning"><b>I could not convert that question into a structured TenderMate query.</b><br>Try including a tender ID, financial year, division, status or instrument (EMD / SD / APS).<br><span class="mini">The new query engine answers from the saved Tender + ATC + Work Order records and does not guess missing values.</span></div>';
+}
 function askAI(){
  const input=document.getElementById('aiQuestion'),e=document.getElementById('aiAnswer');
  const q=String(input?.value||'').trim();
  if(!e)return;if(!q){e.innerHTML='<div class="result warning">Enter a question.</div>';return}
- const l=q.toLowerCase();const db=window.TenderMateDB||{};const ts=Array.isArray(db.tenders)?db.tenders:[];const ws=Array.isArray(db.workOrders)?db.workOrders:[];const docs=Array.isArray(db.documents)?db.documents:[];
- const wanted=aiFindTenders(q);
- const statusFieldMatch=/\b(emd|earnest money|sd|security deposit|aps|additional performance security)\b/i.exec(q);
- if(statusFieldMatch && /\b(paid|returned|released|release letter required|status)\b/i.test(l)){
-   const term=statusFieldMatch[1].toLowerCase();
-   const field=/^emd|earnest/.test(term)?'emd':(/^sd|security deposit/.test(term)?'sd':'aps');
-   const r=aiStatusQuestion(field,q);
-   const label=field==='emd'?'EMD':field==='sd'?'SD':'APS';
-   if(!r.rows.length){e.innerHTML=`<div class="result warning">No ${esc(label)} records matched the requested status${r.division?' for '+esc(r.division):''}.</div>`;return;}
-   if(r.rows.length===1 && r.division && r.desired){
-     const x=r.rows[0];
-     const amount=field==='emd'?x.fin.emd:field==='sd'?x.fin.sd:x.fin.aps;
-     e.innerHTML=`<div class="result"><b>${esc(r.division)} ${esc(label)}:</b> ${esc(aiMoney(amount))} — <span class="badge ${x.status==='Paid'?'badge-blue':x.status==='Returned'?'badge-green':'badge-orange'}">${esc(x.status)}</span><br><span class="mini">${esc(x.t.tenderNumber||'Tender')}</span></div>`;
-   }else{
-     e.innerHTML=`<div class="result"><b>${esc(label)} ${r.desired?'status: '+esc(r.desired):'status'}${r.division?' — '+esc(r.division):''}</b><br>`+r.rows.map(x=>{const amount=field==='emd'?x.fin.emd:field==='sd'?x.fin.sd:x.fin.aps;return `${esc(x.div||tenderDivision(x.t)||'—')} — ${esc(x.t.tenderNumber||'—')} — ${esc(aiMoney(amount))} — <span class="badge ${x.status==='Paid'?'badge-blue':x.status==='Returned'?'badge-green':'badge-orange'}">${esc(x.status)}</span>`}).join('<br>')+'</div>';
-   }
-   return;
- }
- if(/\b(help|what can you ask|examples)\b/i.test(q)){
-  e.innerHTML='<div class="result"><b>Ask TenderMate about:</b><br>• Tender status, closing/opening dates and divisions<br>• EMD, SD, APS and estimated amount<br>• Work Order number, quantity, rate and contract value<br>• Awarded / unawarded tenders<br>• Required documents and tender shortfalls<br>• Experience, turnover, delivery, payment and ATC conditions<br>• Tender locations and clone/species<br>• Total plants, total contract value and average rate<br><br><span class="mini">Example: “What is the EMD for GEM/2026/B/7674227?”</span></div>';return}
- if(/\b(average rate|avg rate|rate per plant|average price)\b/.test(l)&&(/total|overall|all|my|business/.test(l))){const totalV=ws.reduce((s,w)=>s+(numericMoney(w.orderValue)||(numericNumber(w.quantity)*numericNumber(w.rate))),0);const totalQ=ws.reduce((s,w)=>s+numericNumber(w.quantity),0);e.innerHTML=`<div class="result"><b>Overall average rate per plant:</b> ${esc(aiMoney(totalQ?totalV/totalQ:0))}<br>Total contract value: ${esc(aiMoney(totalV))}<br>Total plants: ${esc(aiQty(totalQ))}<br><span class="mini">Source: saved Work Orders</span></div>`;return}
- if(/\b(total plants|total quantity)\b/.test(l)&&(/all|my|business|overall/.test(l))){const total=ws.reduce((s,w)=>s+numericNumber(w.quantity),0);e.innerHTML=`<div class="result"><b>Total plants in saved Work Orders:</b> ${esc(aiQty(total))}<br><span class="mini">Source: saved Work Orders</span></div>`;return}
- if(/\b(total contract|contract amount|contract value)\b/.test(l)&&(/all|my|business|overall|total/.test(l))&&!wanted.length){const total=ws.reduce((s,w)=>s+(numericMoney(w.orderValue)||(numericNumber(w.quantity)*numericNumber(w.rate))),0);e.innerHTML=`<div class="result"><b>Total contract amount:</b> ${esc(aiMoney(total))}<br><span class="mini">Source: saved Work Orders</span></div>`;return}
- if(/\b(awarded|won|work order issued)\b/.test(l)&&(/show|list|which|what|my/.test(l))){const rows=[];const seen=new Set();ws.forEach(w=>{const t=findTenderForWorkOrder(w)||findTenderByGemId(getWorkOrderGemId(w));const k=t?String(t.id):getWorkOrderGemId(w)||w.id;if(seen.has(k))return;seen.add(k);rows.push(t?aiTenderCard(t):`<div class="final-card"><strong>${esc(getWorkOrderGemId(w)||'Work Order')}</strong><br>Work Order: ${esc(w.number||'—')} · Qty ${esc(aiQty(w.quantity))} · Rate ${esc(numericMoney(w.rate).toFixed(2))} · Contract ${esc(aiMoney(w.orderValue))}</div>`)});e.innerHTML='<div class="result"><b>Awarded tenders:</b> '+rows.length+'</div>'+(rows.length?rows.join(''):'<div class="empty">No Work Orders found.</div>');return}
- if(/\b(open tenders?|active tenders?)\b/.test(l)){const x=ts.filter(t=>{const st=String(t.basicInformation?.status||t.workflowStage||'').toLowerCase();return st==='open'||st.includes('published')||st.includes('bid preparation')||st.includes('submitted')||st.includes('evaluation')});e.innerHTML='<div class="result"><b>Open / active tenders:</b> '+x.length+'</div>'+(x.length?x.map(t=>aiTenderCard(t)).join(''):'<div class="empty">None found in stored records.</div>');return}
- if(/\b(emd|earnest money)\b/.test(l)&&(/release|released|returned|status|paid/.test(l))&&(!wanted.length||wanted.length>1)){const rows=ts.map(t=>{const key=dashboardTenderKey(t);const related=ws.filter(w=>{const wt=findTenderForWorkOrder(w);return wt&&dashboardTenderKey(wt)===key});const st=dashboardStatusForTender(t,'emdStatus');const fin=aiTenderFinancial(t);return{t,st,emd:fin.emd,related}});e.innerHTML='<div class="result"><b>EMD status:</b><br>'+rows.map(x=>`${esc(x.t.tenderNumber)} — ${esc(aiMoney(x.emd))} — <span class="badge ${x.st==='Returned'?'badge-green':x.st==='Paid'?'badge-blue':'badge-orange'}">${esc(x.st)}</span>`).join('<br>')+'</div>';return}
- if(/\b(required documents?|documents required|what documents)\b/.test(l)){const x=wanted.length?wanted:ts;if(!x.length){e.innerHTML='<div class="result warning">No tender records are stored.</div>';return}e.innerHTML=x.map(t=>{const req=normalizeReq(t);return `<div class="final-card"><strong>${esc(t.tenderNumber)}</strong> — Required documents (${req.length})<br>${req.length?req.map(r=>`• ${esc(r.name)} <span class="source-tag">${esc(r.source||'Tender')}</span>`).join('<br>'):'No structured document requirements stored.'}</div>`}).join('');return}
- if(/\b(atc|governing rule|precedence|which rule)\b/.test(l)){const x=wanted.length?wanted:ts;if(!x.length){e.innerHTML='<div class="result warning">No matching tender found.</div>';return}e.innerHTML=x.map(t=>`<div class="final-card"><strong>${esc(t.tenderNumber)}</strong><br>Governing rule: <b>${esc(t.governingPrecedence==='gem'?'GeM':'Department ATC')}</b><br>${esc(t.governingPrecedenceReason||'No explicit precedence reason stored; Department ATC is the default.')}</div>`).join('');return}
- if(/\b(work order|work orders)\b/.test(l)){let x=aiFindWorkOrders(q);if(!x.length){e.innerHTML='<div class="result warning">No matching Work Orders found.</div>';return}e.innerHTML='<div class="result"><b>Work Orders found:</b> '+x.length+'</div>'+x.map(w=>`<div class="final-card"><strong>${esc(getWorkOrderGemId(w)||'—')}</strong><br>Work Order: ${esc(w.number||'—')}<br>Division: ${esc(w.division||w.officeDivision||'—')} · FY: ${esc(w.financialYear||'—')}<br>Quantity: ${esc(aiQty(w.quantity))} · Rate: ${esc(numericMoney(w.rate).toFixed(2))} · Contract: ${esc(aiMoney(w.orderValue))}<br>Buyer: ${esc(w.buyer||'—')}</div>`).join('');return}
- if(/\b(deadline|closing date|bid end|opening date|important dates?)\b/.test(l)){const x=wanted.length?wanted:ts;if(!x.length){e.innerHTML='<div class="result warning">No matching tender found.</div>';return}e.innerHTML=x.map(t=>`<div class="final-card"><strong>${esc(t.tenderNumber)}</strong><br>Tender date: ${esc(aiDate(t.basicInformation?.tenderDate))}<br>Bid closing: ${esc(aiDate(t.basicInformation?.bidClosingDate||t.gemConditions?.bidEndDateTime))}<br>Bid opening: ${esc(aiDate(t.basicInformation?.bidOpeningDate||t.gemConditions?.bidOpeningDateTime))}<br>Validity: ${esc(t.basicInformation?.bidValidity||'—')}</div>`).join('');return}
- if(/\b(buyer|consignee|address|contact)\b/.test(l)){const x=wanted.length?wanted:ts;if(!x.length){e.innerHTML='<div class="result warning">No matching tender found.</div>';return}e.innerHTML=x.map(t=>`<div class="final-card"><strong>${esc(t.tenderNumber)}</strong><br>Buyer: ${esc(t.basicInformation?.buyer||t.gemConditions?.consigneeOfficer||'—')}<br>Address: ${esc(t.basicInformation?.buyerAddress||t.departmentATC?.fullAddress||t.gemConditions?.consigneeAddress||'—')}<br>Email: ${esc(t.gemConditions?.buyerEmail||t.departmentATC?.mail||'—')}</div>`).join('');return}
- if(/\b(experience|turnover|eligibility|pre.?qualification|qualification)\b/.test(l)){const x=wanted.length?wanted:ts;if(!x.length){e.innerHTML='<div class="result warning">No matching tender found.</div>';return}e.innerHTML=x.map(t=>`<div class="final-card"><strong>${esc(t.tenderNumber)}</strong><br>Turnover: ${esc(t.departmentATC?.turnover||t.gemConditions?.turnover||'—')}<br>Experience: ${esc(t.departmentATC?.experience||t.gemConditions?.experience||'—')}<br>Eligibility: ${esc((t.departmentATC?.eligibility||[]).join(' | ')||'—')}</div>`).join('');return}
- if(/\b(delivery|payment|contract period|delivery period)\b/.test(l)){const x=wanted.length?wanted:ts;if(!x.length){e.innerHTML='<div class="result warning">No matching tender found.</div>';return}e.innerHTML=x.map(t=>`<div class="final-card"><strong>${esc(t.tenderNumber)}</strong><br>Delivery: ${esc(t.departmentATC?.delivery||t.gemConditions?.deliveryPeriod||'—')}<br>Payment: ${esc(t.departmentATC?.payment||t.gemConditions?.payment||'—')}<br>Contract period: ${esc(t.departmentATC?.contract||t.gemConditions?.contractPeriod||'—')}</div>`).join('');return}
- if(/\b(location|locations|where.*supply|delivery points|consignee)\b/.test(l)){const x=wanted.length?wanted:ts;if(!x.length){e.innerHTML='<div class="result warning">No matching tender found.</div>';return}e.innerHTML=x.map(t=>{const loc=t.quantity?.locations||[];return `<div class="final-card"><strong>${esc(t.tenderNumber)}</strong><br>${loc.length?loc.map(r=>`• ${esc(r.location||r.name||r.area||'Location')} — ${esc(r.quantity||r.qty||'')} ${esc(r.unit||'')}`).join('<br>'):esc(t.departmentATC?.placeOfDelivery||t.departmentATC?.deliveryLocation||t.gemConditions?.consigneeAddress||'No structured locations stored.')}</div>`}).join('');return}
- if(/\b(emd|estimated|security deposit|\bsd\b|aps|rate|quantity|contract value|financial)\b/.test(l)){const x=wanted.length?wanted:ts;if(!x.length){e.innerHTML='<div class="result warning">I could not find a matching tender. Include the GeM ID, e.g. GEM/2026/B/7674227.</div>';return}e.innerHTML=x.map(t=>aiTenderCard(t)).join('');return}
- if(/\btender\b/.test(l)&&ts.length){e.innerHTML='<div class="result"><b>Stored tenders:</b> '+ts.length+'</div>'+ts.map(t=>aiTenderCard(t)).join('');return}
- e.innerHTML='<div class="result warning"><b>I could not identify the question yet.</b><br>Try: “What is the EMD for GEM/2026/B/7674227?”, “Show awarded tenders”, “What documents are required?”, “Show work orders”, “What is the closing date?”, or “What is the APS?”<br><span class="mini">Answers are based only on the structured TenderMate records currently saved in this browser.</span></div>';
+ try{e.innerHTML=aiQueryEngine(q);}catch(err){console.error('TenderMate Ask AI query error',err);e.innerHTML='<div class="result error"><b>Ask AI could not complete the query.</b><br>Please try a more specific question such as “Is Sukma EMD paid?” or “Show awarded tenders”.</div>';}
 }
 loadDB();updateStats();renderDashboard();renderTenders();renderDocuments();
 </script>
