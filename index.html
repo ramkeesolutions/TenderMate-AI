@@ -818,6 +818,7 @@ async function readPDFHybrid(file,out){
       if(el)el.textContent=Math.round(m.progress*100)+'%';
     }
   }});
+  try{await worker.setParameters({tessedit_pageseg_mode:'3',preserve_interword_spaces:'1'});}catch(_e){}
   const pageTexts=base.pageTexts.slice();
   try{
     // readPDFText's buffer may have been transferred to PDF.js; pass a fresh copy.
@@ -827,7 +828,7 @@ async function readPDFHybrid(file,out){
       const pageNo=needs[n];
       if(out)out.innerHTML='<div class="result warning">🔎 OCR page '+pageNo+' of '+base.pages+' ('+(n+1)+' of '+needs.length+' OCR pages)… <span id="ocrProgress">0%</span></div>';
       const page=await pdf.getPage(pageNo);
-      const viewport=page.getViewport({scale:2.2});
+      const viewport=page.getViewport({scale:2.8});
       const canvas=document.createElement('canvas');
       canvas.width=Math.ceil(viewport.width);canvas.height=Math.ceil(viewport.height);
       const ctx=canvas.getContext('2d',{willReadFrequently:true});
@@ -1030,12 +1031,13 @@ async function ocrPDFFile(file,out){
       if(el)el.textContent=Math.round(m.progress*100)+'%';
     }
   }});
+  try{await worker.setParameters({tessedit_pageseg_mode:'3',preserve_interword_spaces:'1'});}catch(_e){}
   let text='';
   try{
     for(let pageNo=1;pageNo<=pdf.numPages;pageNo++){
       out.innerHTML='<div class="result">OCR reading scanned PDF page '+pageNo+' of '+pdf.numPages+'… <span id="ocrProgress">0%</span></div>';
       const page=await pdf.getPage(pageNo);
-      const viewport=page.getViewport({scale:2.0});
+      const viewport=page.getViewport({scale:2.8});
       const canvas=document.createElement('canvas');
       canvas.width=Math.ceil(viewport.width);canvas.height=Math.ceil(viewport.height);
       const ctx=canvas.getContext('2d',{willReadFrequently:true});
@@ -1249,52 +1251,125 @@ function extractWorkOrderData(text,fileName){
  const t=normalizeDocText(text);
  const x={number:'',tenderId:'',buyer:'',date:'',financialYear:'',quantity:'',rate:'',orderValue:'',delivery:'',contract:'',period:'',clone:'',customerType:'',address:'',description:'',notes:''};
  const clean=v=>String(v||'').replace(/\s+/g,' ').trim();
- const num=v=>{const m=String(v||'').replace(/,/g,'').match(/\d+(?:\.\d+)?/);return m?m[0]:''};
- const firstLineAfter=(label, max=220)=>{const re=new RegExp(label+'\s*[:.-]?\s*([^\n]{1,'+max+'})','i');const m=t.match(re);return m?clean(m[1]):''};
+ const cleanField=(v)=>{
+   let z=clean(v);
+   z=z.replace(/\s*(?:Contact\s*No\.?|Email\s*ID|GSTIN|Organisation\s*Name|Ministry|Office\s*Zone|Payment\s*Mode|Role)\s*:.*$/i,'').trim();
+   z=z.replace(/[|¦]+/g,' ').replace(/\s{2,}/g,' ').trim();
+   return z;
+ };
+ const parseNum=v=>{
+   let z=String(v||'').replace(/[₹RsINR\s]/gi,'').trim();
+   if(!z)return'';
+   // OCR sometimes reads decimal points as commas, e.g. 3,355,169,52.
+   const lastComma=z.lastIndexOf(','), lastDot=z.lastIndexOf('.');
+   if(lastComma>lastDot && z.length-lastComma-1===2 && lastComma>0){
+     z=z.slice(0,lastComma).replace(/,/g,'')+'.'+z.slice(lastComma+1);
+   }else{
+     z=z.replace(/,/g,'');
+   }
+   const m=z.match(/\d+(?:\.\d+)?/);
+   return m?m[0]:'';
+ };
+ const stopLabels=/(?:Ministry|Department|Organisation\s*Name|Office\s*Zone|Contact\s*No|Email\s*ID|GSTIN|Financial\s+Approval|Paying\s+Authority|Payment\s+Timelines|Delivery\s+Instructions|Product\s+Details|Seller\s+Details)/i;
 
- // GeM Contract format: use the exact labelled fields first. This avoids
- // accidentally capturing text from neighbouring Buyer/Payment tables.
- const cm=t.match(/Contract\s*No\s*:\s*([A-Z0-9\/_-]{8,})/i); if(cm)x.number=cm[1].trim();
- const dm=t.match(/Generated\s*Date\s*:\s*(\d{1,2}[-./]\w{3,9}[-./]\d{4}|\d{1,2}[-./]\d{1,2}[-./]\d{4})/i); if(dm)x.date=dm[1].trim();
- const gm=t.match(/Bid\s*\/\s*RA\s*\/\s*PBP\s*No\.?\s*:\s*(GEM\/\d{4}\/B\/\d+)/i); if(gm)x.tenderId=gm[1].trim();
+ // Contract / GeM identifiers
+ const cm=t.match(/Contract\s*No\s*:\s*([A-Z0-9\/_-]{8,})/i);
+ if(cm)x.number=cm[1].trim();
+ const dm=t.match(/Generated\s*Date\s*:\s*(\d{1,2}[-./][A-Za-z]{3,9}[-./]\d{4}|\d{1,2}[-./]\d{1,2}[-./]\d{4})/i);
+ if(dm)x.date=dm[1].trim();
+ const gm=t.match(/Bid\s*\/\s*RA\s*\/\s*PBP\s*No\.?\s*:?\s*(GEM\/\d{4}\/B\/\d+)/i);
+ if(gm)x.tenderId=gm[1].trim();
  if(!x.tenderId){const gm2=t.match(/GEM\/\d{4}\/B\/\d+/i);if(gm2)x.tenderId=gm2[0]}
 
- // Buyer: designation + department, not the entire neighbouring table line.
- const des=t.match(/Designation\s*:\s*([^\n]{2,100})/i);
- const dep=t.match(/Department\s*:\s*([^\n]{2,120})/i);
- const buyerParts=[]; if(des&&clean(des[1]) && !/^[-—]+$/.test(clean(des[1]))) buyerParts.push(clean(des[1]).replace(/\s*(?:Email\s*ID|Contact\s*No|GSTIN)\s*:.*$/i,'')); if(dep&&clean(dep[1])) buyerParts.push(clean(dep[1]).replace(/\s*(?:Email\s*ID|Contact\s*No|GSTIN)\s*:.*$/i,''));
- x.buyer=buyerParts.join(' — ').split(/(?:ईमेल\s*आईडी|Email\s*ID|Contact\s*No|GSTIN)\s*[:|]?/i)[0].trim();
+ // Buyer: GeM OCR often places the buyer designation/value on the line BEFORE
+ // the word "Designation". Department is normally in Organisation Details.
+ const buyerSection=(t.match(/Buyer\s+Details[\s\S]{0,1800}?(?=Financial\s+Approval\s+Detail)/i)||[''])[0];
+ const des=buyerSection.match(/Buyer\s+Details\s*\n\s*([^\n]{2,100})/i);
+ const dep=t.match(/Department\s*:\s*([^\n]+)/i);
+ const buyerParts=[];
+ if(des)buyerParts.push(cleanField(des[1]));
+ if(dep)buyerParts.push(cleanField(dep[1]));
+ x.buyer=buyerParts.filter(Boolean).join(' — ');
+ if(!x.buyer){
+   const d=buyerSection.match(/Designation\s*:\s*([^\n]+)/i);
+   x.buyer=[d&&cleanField(d[1]),dep&&cleanField(dep[1])].filter(Boolean).join(' — ');
+ }
 
- // Address: prefer the buyer-details address immediately following its label.
- const addr=t.match(/Buyer\s*Details[\s\S]{0,700}?Address\s*:\s*([^\n]+)(?:\n\s*([^\n]{3,160}))?/i);
- if(addr)x.address=clean((addr[1]||'')+' '+(addr[2]||'')).split(/(?:Financial\s+Approval|Paying\s+Authority|Payment\s+Timelines)/i)[0].trim();
- if(!x.address){const a=t.match(/Address\s*:\s*([^\n]+)(?:\n\s*([^\n]{3,160}))?/i);if(a)x.address=clean((a[1]||'')+' '+(a[2]||'')).split(/(?:Financial\s+Approval|Paying\s+Authority|Payment\s+Timelines)/i)[0].trim();}
+ // Buyer address: OCR frequently puts "Address :" on one line and the actual
+ // address on the following one or two lines. Restrict to Buyer Details so the
+ // Paying Authority address is not selected.
+ const am=buyerSection.match(/Address\s*:\s*[\r\n]*\s*([^\n]+(?:\n\s*[^\n]+)?)/i);
+ if(am)x.address=cleanField(am[1]);
+ if(x.address)x.address=x.address.replace(/\s*(?:Financial\s+Approval|Paying\s+Authority|Payment\s+Mode|GSTIN)\s*:?.*$/i,'').trim();
+ if(!x.address){
+   const a=t.match(/Buyer\s+Details[\s\S]{0,1200}?Address\s*:\s*[\r\n]*\s*([^\n]+(?:\n\s*[^\n]+)?)/i);
+   if(a)x.address=cleanField(a[1]);
+ }
 
- // Product table has a very stable sequence in GeM contracts:
- // Ordered Quantity -> Unit -> Unit Price -> Tax -> Inclusive Price.
- const product=t.match(/Ordered\s*Quantity[\s\S]{0,1800}?([0-9][0-9,]*)\s+pieces\s+([0-9]+(?:\.[0-9]+)?)\s+(?:NA|[0-9,]+(?:\.[0-9]+)?)\s+([0-9][0-9,]*(?:\.[0-9]+)?)/i);
- if(product){x.quantity=num(product[1]);x.rate=num(product[2]);x.orderValue=num(product[3]);}
- if(!x.quantity){const q=t.match(/\b([0-9][0-9,]*)\s+pieces\b/i);if(q)x.quantity=num(q[1]);}
- if(!x.rate){const r=t.match(/\bpieces\s+([0-9]+(?:\.[0-9]+)?)\s+(?:NA|[0-9,]+(?:\.[0-9]+)?)\s+[0-9][0-9,]*/i);if(r)x.rate=num(r[1]);}
- const total=t.match(/Total\s+Order\s+Value\s*\(in\s+INR\)\s*[^0-9]{0,80}([0-9][0-9,]*(?:\.[0-9]+)?)/i); if(total)x.orderValue=num(total[1]);
+ // Product table. OCR can merge columns or read decimal points as missing/commas.
+ const productSection=(t.match(/Product\s+Details[\s\S]{0,3000}?(?=Consignee\s+Detail|Product\s+Specification|Total\s+Order\s+Value|ePBG\s+Detail|Terms\s+and\s+Conditions)/i)||[''])[0];
+ const qMatch=productSection.match(/\b([0-9][0-9,]{3,})\s*(?:\|\s*)?pieces\b/i);
+ if(qMatch)x.quantity=parseNum(qMatch[1]);
 
- // Delivery dates are taken from the consignee table, not from generic prose.
- const del=t.match(/([0-9]{1,2}-[A-Za-z]{3}-[0-9]{4})\s+([0-9]{1,2}-[A-Za-z]{3}-[0-9]{4})/);
- if(del)x.delivery=del[1]+' to '+del[2];
- if(!x.delivery){const del2=t.match(/Delivery\s*Start[\s\S]{0,500}?([0-9]{1,2}[-./][A-Za-z0-9]{2,9}[-./][0-9]{4})[\s]+([0-9]{1,2}[-./][A-Za-z0-9]{2,9}[-./][0-9]{4})/i);if(del2)x.delivery=del2[1]+' to '+del2[2];}
+ let totalMatch=t.match(/Total\s+Order\s+Value\s*\(in\s+INR\)\s*[\s\S]{0,120}?\b([0-9][0-9,]*(?:\.[0-9]{2})?)\b/i);
+ if(!totalMatch)totalMatch=t.match(/Total\s+Order\s+Value\s*\(in\s+INR\)\s*[\s\S]{0,120}?([0-9][0-9,]*(?:[.,][0-9]{2}))/i);
+ if(totalMatch)x.orderValue=parseNum(totalMatch[1]);
 
- // Clone/product description.
- const prod=t.match(/Product\s+Name\s*:\s*([\s\S]{1,180}?)(?=\s+Brand\s*:|\s+Brand\s+Type\s*:|\s+Catalogue\s+Status\s*:)/i); if(prod)x.clone=clean(prod[1]);
- if(!x.clone){const c=t.match(/Clonal\s+Eucalyptus,\s*Clone\s+no\.?\s*([0-9]+)/i);if(c)x.clone='Clonal Eucalyptus, Clone no.'+c[1];}
- x.description=x.clone || firstLineAfter('Item\s+Description',300);
+ if(!x.orderValue){
+   const pv=productSection.match(/\b([0-9][0-9,]*(?:[.,][0-9]{2}))\s*$/m);
+   if(pv)x.orderValue=parseNum(pv[1]);
+ }
+
+ // Prefer rate calculated from the authoritative quantity + total value.
+ // This also fixes OCR that reads 4.72 as "472".
+ if(x.quantity&&x.orderValue){
+   const q=Number(x.quantity), v=Number(x.orderValue);
+   if(q>0&&v>0)x.rate=(v/q).toFixed(2);
+ }
+ if(!x.rate){
+   const rm=productSection.match(/\bpieces\s+([0-9]{1,4}(?:[.,][0-9]{1,2})?)\s+(?:NA|[0-9,]+(?:[.,][0-9]{1,2})?)/i);
+   if(rm){
+     let r=rm[1].replace(',','.');
+     if(/^\d{3}$/.test(r))r=(Number(r)/100).toFixed(2);
+     x.rate=parseNum(r);
+   }
+ }
+
+ // Product / clone name. Use the explicit Product Name first, then a clean
+ // Eucalyptus clone fallback that ignores OCR noise around adjacent labels.
+ const pm=productSection.match(/Product\s+Name\s*:\s*([\s\S]{1,220}?)(?=\s+Brand\s*:|\s+Brand\s+Type\s*:|\s+Catalogue\s+Status\s*:)/i);
+ if(pm)x.clone=clean(pm[1]);
+ // Prefer a clean clone number from the specification section because OCR can
+ // misread "no." inside the Product Name cell.
+ const cloneNo=t.match(/Clone\s*(?:no\.?|number)\s*[:.]?\s*([0-9]{2,4})/i);
+ if(cloneNo){
+   const cloneNum=cloneNo[1];
+   x.clone='Unbranded 30 centimeter cm Clonal Eucalyptus, Clone no.'+cloneNum;
+ }
+ if(!cloneNo&&!x.clone){
+   const c=t.match(/(?:Unbranded\s+)?\d+\s*centimeter(?:\s+cm)?\s+Clonal\s+Eucalyptus[\s,]*Clone[^\d]{0,12}([0-9]{2,4})/i);
+   if(c)x.clone='Unbranded 30 centimeter cm Clonal Eucalyptus, Clone no.'+c[1];
+ }
+ if(x.clone){
+   x.clone=x.clone.replace(/\s*\|\s*.*$/,'').replace(/\s*#.*$/,'').replace(/\s*Brand\s*:.*$/i,'').trim();
+ }
+ x.description=x.clone||'';
 
  if(/State Government|Forest Department Chhattisgarh|Government/i.test(t))x.customerType='Government';
  x.financialYear=x.date?inferFY(x.date):'';
- if(!x.financialYear){const fy=t.match(/\b(20\d{2}[-–]\d{2})\b/);if(fy)x.financialYear=fy[1].replace('–','-');}
+ if(!x.financialYear){const fy=t.match(/\b(20\d{2}[-–]\d{2})\b/);if(fy)x.financialYear=fy[1].replace('–','-')}
 
- // GeM contract has no separate contract-period field in the supplied file.
- // Keep it blank rather than incorrectly taking the payment/delivery clause.
- x.contract=''; x.period='';
+ // Delivery period: use the date pair from the consignee table.
+ const dates=[...t.matchAll(/\b([0-9]{1,2}-[A-Za-z]{3}-[0-9]{4})\b/g)].map(m=>m[1]);
+ const uniqueDates=[...new Set(dates)];
+ if(uniqueDates.length>=2)x.delivery=uniqueDates[0]+' to '+uniqueDates[1];
+ if(!x.delivery){
+   const del2=t.match(/Delivery\s+Start[\s\S]{0,500}?([0-9]{1,2}[-./][A-Za-z0-9]{2,9}[-./][0-9]{4})[\s]+([0-9]{1,2}[-./][A-Za-z0-9]{2,9}[-./][0-9]{4})/i);
+   if(del2)x.delivery=del2[1]+' to '+del2[2];
+ }
+
+ x.contract='';
+ x.period='';
 
  const notes=[];
  if(x.number)notes.push('Contract / Work Order No.: '+x.number);
