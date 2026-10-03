@@ -838,7 +838,7 @@ async function readPDFHybrid(file,out){
     }
   }finally{await worker.terminate()}
   const text=pageTexts.map((x,i)=>'\n--- PAGE '+(i+1)+' ---\n'+x+'\n').join('');
-  return {text,pages:base.pages,pageTexts,buffer,method:'Hybrid PDF text + OCR',ocrPages:needs};
+  return {text,pages:base.pages,pageTexts,buffer:base.buffer,method:'Hybrid PDF text + OCR',ocrPages:needs};
 }
 async function analyzeTenderPDFs(){
   const out=document.getElementById('pdfAnalysisResult'),gf=document.getElementById('gemSourceFile'),af=document.getElementById('atcSourceFile');
