@@ -26,6 +26,8 @@
 .business-dashboard{background:#fff;border:1px solid #e1e8e6;border-radius:18px;box-shadow:0 3px 12px #0001;padding:20px;margin-bottom:24px}.dashboard-head{display:flex;justify-content:space-between;align-items:flex-start;gap:15px;margin-bottom:16px}.dashboard-head h2{font-size:21px;margin-bottom:5px}.dashboard-head .panel-subtitle{margin-bottom:0}.dashboard-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}.dash-card{border:1px solid #e2e8f0;border-radius:13px;padding:16px;background:#f8fafc;min-width:0}.dash-card.wide{grid-column:span 1}.dash-card span{display:block;color:#64748b;font-size:12px;font-weight:bold;line-height:1.35}.dash-card strong{display:block;margin-top:8px;color:#087f70;font-size:24px;font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.dash-card small{display:block;margin-top:7px;color:#64748b;font-size:12px}.dash-card.awarded{background:#ecfdf5;border-color:#bbf7d0}.dash-card.money{background:#f8fafc}.dash-card.money strong{font-size:21px}@media(max-width:900px){.dashboard-grid{grid-template-columns:repeat(2,1fr)}}@media(max-width:700px){.dashboard-head{flex-direction:column}.dashboard-head button{width:100%}.dashboard-grid{grid-template-columns:1fr 1fr}.dash-card.wide{grid-column:span 1}}@media(max-width:450px){.dashboard-grid{grid-template-columns:1fr}.dash-card.wide{grid-column:span 1}}
 
 .letter-source-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:12px}.letter-source-item{background:#fff;border:1px solid #dbe4e1;border-radius:10px;padding:10px;font-size:12px}.letter-source-item strong{display:block;color:#075e54;margin-bottom:4px}.letter-source-item.ok{border-left:4px solid #059669}.letter-source-item.warn{border-left:4px solid #ea580c}.letter-integration-title{font-weight:bold;font-size:15px;margin-bottom:4px}.letter-auto{background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:12px}.letter-auto-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}.letter-auto-grid div{font-size:12px}.letter-auto-grid b{display:block;color:#475569;margin-bottom:3px}@media(max-width:700px){.letter-source-grid,.letter-auto-grid{grid-template-columns:1fr}}
+
+.auth-panel{max-width:520px;margin:40px auto;padding:26px;background:#fff;border:1px solid #dfe8e5;border-radius:18px;box-shadow:0 4px 18px #0001}.auth-panel h2{margin-bottom:8px}.auth-panel p{color:#68736f;font-size:13px;line-height:1.5;margin-bottom:18px}.auth-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}.auth-status{margin-top:14px}.account-bar{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:15px;padding:12px 15px;border-radius:12px;background:#eef8f5}.account-bar .small{margin:0}.hidden-auth{display:none!important}
 </style>
 <script src="database.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -221,7 +223,17 @@
 
 <section id="bills" class="page"><button class="back" onclick="home()">← Back</button><div class="panel"><h2>🧾 Bill Generator</h2><div class="form-grid"><div><label>Bill Number</label><input id="billNumber"></div><div><label>Date</label><input id="billDate" type="date"></div><div><label>Buyer</label><input id="billBuyer"></div><div><label>Quantity</label><input id="billQty" type="number"></div><div><label>Rate</label><input id="billRate" type="number" step="0.01"></div><div><label>GST %</label><input id="billGST" type="number" step="0.01" value="0"></div></div><button onclick="saveBill()">Save Bill</button><div id="billResult"></div><div id="billList" style="margin-top:18px"></div></div></section>
 
-<section id="settings" class="page"><button class="back" onclick="home()">← Back</button><div class="panel"><h2>⚙️ Settings & Backup</h2><p class="panel-subtitle">TenderMate uses Supabase for cloud records, with browser-local storage retained as a working cache and backup. Original uploaded PDFs/images remain in this browser for now; cloud file storage can be added separately.</p><div class="result" style="margin-bottom:14px"><b>Cloud status:</b> <span id="tmSettingsCloudStatus">Connecting...</span></div><div class="actions"><button onclick="exportBackup()">⬇ Export Backup JSON</button><button class="secondary" onclick="document.getElementById('restoreFile').click()">⬆ Restore Backup JSON</button><button class="danger" onclick="clearAllData()">Delete All Local Data</button></div><input id="restoreFile" type="file" accept="application/json" class="hidden" onchange="restoreBackup(event)"><div id="settingsResult"></div><div class="result" style="margin-top:18px"><b>Current storage:</b> <span id="storageSummary"></span><br><span class="small">Source PDFs selected in the Tender Analysis screen are currently stored as file metadata/reference only, not as binary PDF files.</span></div></div></section>
+<section id="account" class="page"><button class="back" onclick="home()">← Back</button><div class="auth-panel">
+<h2>🔐 TenderMate Account</h2>
+<p>Use one TenderMate account on your computer and mobile. Your cloud records are protected by Supabase Row Level Security and belong to your account.</p>
+<div id="accountCurrent" class="result" style="margin-bottom:14px"></div>
+<label>Email</label><input id="authEmail" type="email" autocomplete="email" placeholder="your@email.com">
+<label>Password</label><input id="authPassword" type="password" autocomplete="current-password" placeholder="Minimum 6 characters">
+<label>Confirm Password</label><input id="authPassword2" type="password" autocomplete="new-password" placeholder="Repeat password">
+<div class="auth-actions"><button onclick="tmAuthSignIn()">Sign In</button><button class="secondary" onclick="tmAuthCreateOrUpgrade()">Create / Upgrade Account</button><button class="light" onclick="tmAuthSignOut()">Sign Out</button></div>
+<div id="authResult" class="auth-status"></div>
+</div></section>
+<section id="settings" class="page"><button class="back" onclick="home()">← Back</button><div class="panel"><h2>⚙️ Settings & Backup</h2><p class="panel-subtitle">TenderMate uses Supabase for cloud records, with browser-local storage retained as a working cache and backup. Original uploaded PDFs/images remain in this browser for now; cloud file storage can be added separately.</p><div id="accountBar" class="account-bar"><div><b>Account:</b> <span id="tmAccountLabel">Checking...</span><div class="small">Use the same account on your computer and mobile.</div></div><button class="light" onclick="openPage('account');renderAccountPage()">Manage Account</button></div><div class="result" style="margin-bottom:14px"><b>Cloud status:</b> <span id="tmSettingsCloudStatus">Connecting...</span></div><div class="actions"><button onclick="exportBackup()">⬇ Export Backup JSON</button><button class="secondary" onclick="document.getElementById('restoreFile').click()">⬆ Restore Backup JSON</button><button class="danger" onclick="clearAllData()">Delete All Local Data</button></div><input id="restoreFile" type="file" accept="application/json" class="hidden" onchange="restoreBackup(event)"><div id="settingsResult"></div><div class="result" style="margin-top:18px"><b>Current storage:</b> <span id="storageSummary"></span><br><span class="small">Source PDFs selected in the Tender Analysis screen are currently stored as file metadata/reference only, not as binary PDF files.</span></div></div></section>
 
 <div class="footer">TenderMate AI — local prototype for tender and business management</div>
 </div>
@@ -241,7 +253,7 @@ function saveDB(){normalizeDB();localStorage.setItem(DBKEY,JSON.stringify(window
 /* ===== TenderMate AI / Supabase cloud layer ===== */
 const TM_SUPABASE_URL='https://rlyjnqvoujqwxcdvblzt.supabase.co';
 const TM_SUPABASE_PUBLISHABLE_KEY='sb_publishable_CFGe_U-Hl84jeVlOa9ubJg_cK18fqWq';
-let tmSupabase=null,tmCloudReady=false,tmCloudTimer=null,tmCloudBusy=false;
+let tmSupabase=null,tmCloudReady=false,tmCloudTimer=null,tmCloudBusy=false;window.tmAuthUser=null;
 
 function tmCloudStatus(message,kind='ok'){
   let e=document.getElementById('tmCloudStatus');
@@ -446,14 +458,95 @@ async function initTenderMateCloud(){
   try{
     if(!window.supabase?.createClient)throw new Error('Supabase client library did not load');
     tmSupabase=window.supabase.createClient(TM_SUPABASE_URL,TM_SUPABASE_PUBLISHABLE_KEY);
-    let s=(await tmSupabase.auth.getSession()).data?.session;if(!s){const a=await tmSupabase.auth.signInAnonymously();if(a.error)throw a.error;s=a.data?.session}
-    if(!s)throw new Error('Anonymous TenderMate session could not be created');
+    const sessionResult=await tmSupabase.auth.getSession();
+    if(sessionResult.error)throw sessionResult.error;
+    let s=sessionResult.data?.session;
+    // Do not create a new anonymous account on a new device. A permanent
+    // TenderMate account is required for the same cloud data on every device.
+    if(!s){
+      tmCloudReady=false;
+      tmCloudStatus('☁️ Sign in to TenderMate','busy');
+      renderAccountPage();
+      return;
+    }
     tmCloudReady=true;
+    window.tmAuthUser=s.user;
     const has=await tmCloudLoad();
     if(!has&&tmLocalHasData())await tmCloudSyncAll();
     tmCloudStatus('☁️ Cloud connected');
-    updateStats();renderDashboard();renderTenders();renderDocuments();
+    updateStats();renderDashboard();renderTenders();renderDocuments();renderWorkOrders();
+    renderAccountPage();
   }catch(e){console.error('TenderMate cloud init failed',e);tmCloudStatus('☁️ Cloud unavailable — local mode','error')}
+}
+
+async function tmAuthSignIn(){
+  if(!tmSupabase){alert('Cloud is still connecting. Please wait a moment.');return;}
+  const email=val('authEmail'),password=document.getElementById('authPassword')?.value||'';
+  const out=document.getElementById('authResult');
+  if(!email||!password){if(out)out.innerHTML='<div class="result error">Enter email and password.</div>';return}
+  try{
+    if(out)out.innerHTML='<div class="result">Signing in...</div>';
+    const r=await tmSupabase.auth.signInWithPassword({email,password});
+    if(r.error)throw r.error;
+    window.tmAuthUser=r.data.user;tmCloudReady=true;
+    const has=await tmCloudLoad();
+    if(!has&&tmLocalHasData())await tmCloudSyncAll();
+    tmCloudStatus('☁️ Cloud connected');updateStats();renderDashboard();renderTenders();renderDocuments();renderWorkOrders();renderAccountPage();
+    if(out)out.innerHTML='<div class="result success">Signed in successfully. Your TenderMate data is now available on this device.</div>';
+    home();
+  }catch(e){console.error(e);if(out)out.innerHTML='<div class="result error">Sign in failed: '+esc(e.message||e)+'</div>'}
+}
+
+async function tmAuthCreateOrUpgrade(){
+  if(!tmSupabase){alert('Cloud is still connecting. Please wait a moment.');return}
+  const email=val('authEmail'),password=document.getElementById('authPassword')?.value||'',password2=document.getElementById('authPassword2')?.value||'';
+  const out=document.getElementById('authResult');
+  if(!email||!password){if(out)out.innerHTML='<div class="result error">Enter email and password.</div>';return}
+  if(password.length<6){if(out)out.innerHTML='<div class="result error">Password must be at least 6 characters.</div>';return}
+  if(password!==password2){if(out)out.innerHTML='<div class="result error">Passwords do not match.</div>';return}
+  try{
+    if(out)out.innerHTML='<div class="result">Creating / upgrading your TenderMate account...</div>';
+    const session=(await tmSupabase.auth.getSession()).data?.session;
+    if(session?.user?.is_anonymous){
+      // Upgrade the existing anonymous user in-place. This preserves the same
+      // auth.uid(), so all rows already owned by this user remain accessible.
+      const r=await tmSupabase.auth.updateUser({email,password});
+      if(r.error)throw r.error;
+      window.tmAuthUser=r.data.user||session.user;tmCloudReady=true;
+      await tmCloudLoad();
+      tmCloudStatus('☁️ Permanent account connected');updateStats();renderDashboard();renderAccountPage();
+      if(out)out.innerHTML='<div class="result success">Account created and your existing TenderMate cloud data is preserved. Use this email/password on your mobile.</div>';
+      return;
+    }
+    const r=await tmSupabase.auth.signUp({email,password});
+    if(r.error)throw r.error;
+    if(r.data?.session){
+      window.tmAuthUser=r.data.user;tmCloudReady=true;await tmCloudLoad();
+      if(out)out.innerHTML='<div class="result success">Account created and signed in.</div>';
+      renderAccountPage();home();
+    }else{
+      if(out)out.innerHTML='<div class="result success">Account created. Check your email to confirm it, then sign in here. Your existing cloud data will not be moved automatically from a different anonymous user.</div>';
+    }
+  }catch(e){console.error(e);if(out)out.innerHTML='<div class="result error">Account setup failed: '+esc(e.message||e)+'</div>'}
+}
+
+async function tmAuthSignOut(){
+  if(!tmSupabase)return;
+  await tmSupabase.auth.signOut();
+  tmCloudReady=false;window.tmAuthUser=null;tmCloudStatus('☁️ Signed out','busy');updateStats();renderAccountPage();openPage('account');
+}
+function renderAccountPage(){
+  const u=window.tmAuthUser;
+  const cur=document.getElementById('accountCurrent');
+  const label=document.getElementById('tmAccountLabel');
+  if(u){
+    const anon=u.is_anonymous?'Anonymous session':'Permanent account';
+    if(cur)cur.innerHTML='<b>'+esc(anon)+'</b><br><span class="small">'+esc(u.email||'No email attached')+'</span>';
+    if(label)label.textContent=u.email||anon;
+  }else{
+    if(cur)cur.innerHTML='<b>Not signed in</b><br><span class="small">Sign in to access your cloud data on this device.</span>';
+    if(label)label.textContent='Not signed in';
+  }
 }
 
 function esc(v){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));}
@@ -461,7 +554,7 @@ function val(id){const e=document.getElementById(id);return e?e.value.trim():''}
 function setVal(id,v){const e=document.getElementById(id);if(e)e.value=v??''}
 function splitLines(v){return String(v||'').split(/\r?\n/).map(x=>x.trim()).filter(Boolean)}
 function today(){return new Date().toISOString().slice(0,10)}
-function openPage(id){document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));const p=document.getElementById(id);if(p)p.classList.add('active');if(id==='home')renderDashboard();if(id==='tenders')renderTenders();if(id==='documents')renderDocuments();if(id==='shortfall'){populateShortfallTenders();checkShortfall()}if(id==='workorders'){populateWorkOrderYears();renderWorkOrders();bindWorkOrderActions();}if(id==='rates')renderRates();if(id==='letters'){populateLetterSources();if(!val('letterDate'))setVal('letterDate',today());renderLetters();}if(id==='dc')renderDC();if(id==='bills')renderBills();if(id==='settings')renderSettings();updateStats();window.scrollTo({top:0,behavior:'smooth'})}
+function openPage(id){document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));const p=document.getElementById(id);if(p)p.classList.add('active');if(id==='home')renderDashboard();if(id==='tenders')renderTenders();if(id==='documents')renderDocuments();if(id==='shortfall'){populateShortfallTenders();checkShortfall()}if(id==='workorders'){populateWorkOrderYears();renderWorkOrders();bindWorkOrderActions();}if(id==='rates')renderRates();if(id==='letters'){populateLetterSources();if(!val('letterDate'))setVal('letterDate',today());renderLetters();}if(id==='dc')renderDC();if(id==='bills')renderBills();if(id==='settings')renderSettings();if(id==='account')renderAccountPage();updateStats();window.scrollTo({top:0,behavior:'smooth'})}
 function home(){openPage('home')}
 function updateStats(){normalizeDB();['Tenders','Documents','WorkOrders','Bills'].forEach((x,i)=>{const id=['statTenders','statDocuments','statWorkOrders','statBills'][i];const k=['tenders','documents','workOrders','bills'][i];const e=document.getElementById(id);if(e)e.textContent=window.TenderMateDB[k].length});const cs=document.getElementById('tmSettingsCloudStatus');if(cs)cs.textContent=tmCloudReady?'Connected to Supabase':'Connecting / local cache';if(document.getElementById('home')?.classList.contains('active'))renderDashboard();}
 function showTenderTab(name,btn){document.querySelectorAll('#tenders .tab-content').forEach(x=>x.classList.remove('active'));const e=document.getElementById('tab-'+name);if(e)e.classList.add('active');document.querySelectorAll('#tenders .tab').forEach(x=>x.classList.remove('active'));if(btn)btn.classList.add('active');if(name==='final')renderFinalConditions();if(name==='docs')renderRequiredDocs();if(name==='locations')renderLocations()}
