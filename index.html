@@ -248,12 +248,12 @@
 const DBKEY='TenderMateDB';
 function loadDB(){try{const saved=localStorage.getItem(DBKEY);if(saved){const parsed=JSON.parse(saved);window.TenderMateDB=Object.assign(window.TenderMateDB||{},parsed)}}catch(e){console.warn(e)} normalizeDB();}
 function normalizeDB(){const f=['tenders','documents','workOrders','deliveryChallans','bills','letters','rates'];if(!window.TenderMateDB)window.TenderMateDB={};f.forEach(k=>{if(!Array.isArray(window.TenderMateDB[k]))window.TenderMateDB[k]=[]});}
-function saveDB(){normalizeDB();localStorage.setItem(DBKEY,JSON.stringify(window.TenderMateDB));updateStats();if(typeof queueCloudSync==='function')queueCloudSync();}
+function saveDB(){normalizeDB();tmDeduplicateDocuments();localStorage.setItem(DBKEY,JSON.stringify(window.TenderMateDB));updateStats();tmLocalChangeSeq++;if(typeof queueCloudSync==='function')queueCloudSync();}
 
 /* ===== TenderMate AI / Supabase cloud layer ===== */
 const TM_SUPABASE_URL='https://rlyjnqvoujqwxcdvblzt.supabase.co';
 const TM_SUPABASE_PUBLISHABLE_KEY='sb_publishable_CFGe_U-Hl84jeVlOa9ubJg_cK18fqWq';
-let tmSupabase=null,tmCloudReady=false,tmCloudTimer=null,tmCloudBusy=false;window.tmAuthUser=null;
+let tmSupabase=null,tmCloudReady=false,tmCloudTimer=null,tmCloudBusy=false,tmCloudPollTimer=null,tmRealtimeChannel=null,tmLocalChangeSeq=0,tmCloudNeedsRepair=false,tmCloudResyncPending=false;window.tmAuthUser=null;
 
 function tmCloudStatus(message,kind='ok'){
   let e=document.getElementById('tmCloudStatus');
@@ -305,8 +305,14 @@ function tmTenderLocal(r,locs){
     apsStatus:m.apsStatus||'Not Applicable',billStatus:m.billStatus||'Not Submitted',originalFiles:m.originalFiles||{},
     analysis:m.analysis||{},createdDate:m.createdDate||r.created_at,lastUpdated:m.lastUpdated||r.updated_at};
 }
+function tmStableUUID(seed){
+  let h1=0x811c9dc5,h2=0x01000193,h3=0x9e3779b9,h4=0x85ebca6b;
+  for(let i=0;i<String(seed||'').length;i++){const c=String(seed).charCodeAt(i);h1=Math.imul(h1^c,16777619);h2=Math.imul(h2^c,2246822519);h3=Math.imul(h3^c,3266489917);h4=Math.imul(h4^c,668265263);}
+  const hex=[h1,h2,h3,h4].map(x=>(x>>>0).toString(16).padStart(8,'0')).join('');
+  return hex.slice(0,8)+'-'+hex.slice(8,12)+'-4'+hex.slice(13,16)+'-'+((parseInt(hex.slice(16,18),16)&0x3f)|0x80).toString(16).padStart(2,'0')+hex.slice(18,20)+'-'+hex.slice(20,32);
+}
 function tmDocRow(d){
-  return {document_name:d.name||'',document_type:d.category||'other',status:d.verificationStatus||'Needs verification',
+  return {id:tmStableUUID('tendermate-doc|'+tmDocumentKey(d)),document_name:d.name||'',document_type:d.category||'other',status:d.verificationStatus||'Needs verification',
     file_name:d.fileName||'',mime_type:d.fileType||'',file_size:Number(d.fileSize||0)||null,
     document_number:d.number||'',issue_date:d.issueDate||null,expiry_date:d.expiryDate||null,issuing_authority:d.authority||'',
     holder_entity:d.entityName||'',registration_number:d.identifier||'',financial_year:d.financialYear||'',
@@ -314,11 +320,11 @@ function tmDocRow(d){
     experience_value:numericMoney(d.experienceValue)||null,experience_quantity:numericNumber(d.experienceQuantity)||null,
     experience_period:d.experiencePeriod||'',evidence_type:d.evidenceType||'',customer:d.customer||'',
     customer_type:d.customerType||'',supply_description:d.description||'',clone_species:d.experienceClone||'',
-    extracted_data:{localId:d.id||'',pages:d.pages||0,extractedTextLength:d.extractedTextLength||0},
+    extracted_data:{localId:d.id||'',dedupeKey:tmDocumentKey(d),pages:d.pages||0,extractedTextLength:d.extractedTextLength||0},
     notes:d.notes||''};
 }
 function tmDocLocal(r){
-  const x=r.extracted_data||{};return {id:x.localId||r.id,name:r.document_name||'',category:r.document_type||'other',
+  const x=r.extracted_data||{};return {id:x.localId||r.id,dedupeKey:x.dedupeKey||'',name:r.document_name||'',category:r.document_type||'other',
     documentType:r.document_type||'Other',number:r.document_number||'',issueDate:r.issue_date||'',expiryDate:r.expiry_date||'',
     authority:r.issuing_authority||'',entityName:r.holder_entity||'',identifier:r.registration_number||'',
     financialYear:r.financial_year||'',assessmentYear:r.assessment_year||'',turnoverValue:r.turnover_value??'',
@@ -370,11 +376,38 @@ async function tmCloudFetch(){
   for(const q of qs)if(q.error)throw q.error;
   return {tenders:qs[0].data||[],documents:qs[1].data||[],workOrders:qs[2].data||[],financial:qs[3].data||[],bills:qs[4].data||[],letters:qs[5].data||[]};
 }
+function tmRowTime(x){
+  const v=x?.updatedDate||x?.lastUpdated||x?.updated_at||x?.createdDate||x?.created_at||'';
+  const t=Date.parse(v); return Number.isFinite(t)?t:0;
+}
 function tmMergeByKey(localRows, cloudRows, keyFn){
   const out=new Map();
-  for(const x of (cloudRows||[])) out.set(String(keyFn(x)), x);
-  for(const x of (localRows||[])) out.set(String(keyFn(x)), x);
+  for(const x of (cloudRows||[])){const k=String(keyFn(x)||'').trim().toLowerCase();if(!k)continue;out.set(k,x)}
+  for(const x of (localRows||[])){const k=String(keyFn(x)||'').trim().toLowerCase();if(!k)continue;const old=out.get(k);if(!old||tmRowTime(x)>=tmRowTime(old))out.set(k,x)}
   return [...out.values()];
+}
+function tmDocumentKey(d){
+  const num=String(d?.number||'').trim().toLowerCase();
+  if(num)return 'number:'+num+'|type:'+String(d?.category||d?.documentType||'').trim().toLowerCase();
+  const fn=String(d?.fileName||d?.name||'').trim().toLowerCase().replace(/\s+/g,' ');
+  const entity=String(d?.entityName||d?.identifier||'').trim().toLowerCase();
+  return 'file:'+fn+'|entity:'+entity+'|type:'+String(d?.category||d?.documentType||'').trim().toLowerCase();
+}
+function tmDeduplicateDocuments(){
+  const rows=Array.isArray(window.TenderMateDB?.documents)?window.TenderMateDB.documents:[];
+  const map=new Map(); const removed=[];
+  for(const d of rows){const k=tmDocumentKey(d);const old=map.get(k);if(!old){map.set(k,d);continue}const keep=tmRowTime(d)>=tmRowTime(old)?d:old;const drop=keep===d?old:d;map.set(k,keep);removed.push(drop)}
+  window.TenderMateDB.documents=[...map.values()];
+  return removed;
+}
+function tmRepairLegacyDuplicates(){
+  const removed=tmDeduplicateDocuments();
+  if(removed.length){
+    tmCloudNeedsRepair=true;
+    localStorage.setItem(DBKEY,JSON.stringify(window.TenderMateDB));
+    console.info('TenderMate removed duplicate document records:',removed.length);
+  }
+  return removed.length;
 }
 async function tmCloudLoad(){
   // IMPORTANT: Keep existing local records when cloud already contains tenders.
@@ -395,17 +428,13 @@ async function tmCloudLoad(){
   // This is especially important for Work Orders: users can select the
   // awarded Tender/GeM ID, save all Work Orders locally, then sync them.
   window.TenderMateDB.tenders=tmMergeByKey(localSnapshot.tenders||[],cloudTenders,x=>tmGem(x.tenderNumber||x.gemId||x.basicInformation?.tenderNumber||''));
-  window.TenderMateDB.documents=tmMergeByKey(localSnapshot.documents||[],cloudDocs,x=>String(x.id||x.number||x.fileName||''));
+  window.TenderMateDB.documents=tmMergeByKey(localSnapshot.documents||[],cloudDocs,tmDocumentKey);
+   if(cloudDocs.length>window.TenderMateDB.documents.length)tmCloudNeedsRepair=true;
   window.TenderMateDB.workOrders=tmMergeByKey(localSnapshot.workOrders||[],cloudWos,x=>String(x.number||x.id||''));
   window.TenderMateDB.bills=tmMergeByKey(localSnapshot.bills||[],cloudBills,x=>String(x.number||x.id||''));
   window.TenderMateDB.letters=tmMergeByKey(localSnapshot.letters||[],cloudLetters,x=>String(x.id||x.reference||''));
-  // De-duplicate any legacy local document copies by their stable localId/number/file name.
-  const seenDocs=new Map();
-  for(const d of window.TenderMateDB.documents||[]){
-    const k=String(d.id||d.number||d.fileName||d.name||'').trim().toLowerCase();
-    if(k) seenDocs.set(k,d);
-  }
-  window.TenderMateDB.documents=[...seenDocs.values()];
+  // Repair legacy duplicate document copies using a stable business key.
+  tmDeduplicateDocuments();
   window.TenderMateDB.deliveryChallans=localSnapshot.deliveryChallans||[];
   window.TenderMateDB.rates=localSnapshot.rates||[];
 
@@ -435,11 +464,18 @@ async function tmCloudSyncAll(){
     const locRows=[];(db.tenders||[]).forEach(t=>{const tid=tmap[tmGem(t.tenderNumber)];(t.quantity?.locations||[]).forEach(l=>locRows.push({tender_id:tid,location_name:l.location||l.name||l.area||'Location',distance_km:numericNumber(l.distance||l.distanceKm)||null,quantity:numericNumber(l.quantity||l.qty)||null,extra_quantity:numericNumber(l.extraQuantity)||null,quantity_basis:l.basis||'',notes:''}))});
     if(locRows.length){const z=await tmSupabase.from('tender_locations').insert(locRows);if(z.error)throw z.error}
 
-    // Documents, bills and letters are rebuilt for this user's cloud dataset.
-    for(const table of ['documents','bills','letters']){
+    // Repair legacy document duplicates once; afterward documents are stable-ID upserted.
+    tmDeduplicateDocuments();
+    if(tmCloudNeedsRepair){const z=await tmSupabase.from('documents').delete().neq('id','00000000-0000-0000-0000-000000000000');if(z.error)throw z.error}
+    const dr=(db.documents||[]).map(tmDocRow);
+    if(dr.length){const z=await tmSupabase.from('documents').upsert(dr,{onConflict:'id'});if(z.error)throw z.error}
+    const keepDocIds=new Set(dr.map(x=>x.id));
+    const oldDocs=await tmSupabase.from('documents').select('id');if(oldDocs.error)throw oldDocs.error;
+    const staleDocs=(oldDocs.data||[]).filter(x=>!keepDocIds.has(x.id)).map(x=>x.id);
+    if(staleDocs.length){const z=await tmSupabase.from('documents').delete().in('id',staleDocs);if(z.error)throw z.error}
+    for(const table of ['bills','letters']){
       const z=await tmSupabase.from(table).delete().neq('id','00000000-0000-0000-0000-000000000000');if(z.error)throw z.error;
     }
-    const dr=(db.documents||[]).map(tmDocRow);if(dr.length){const z=await tmSupabase.from('documents').insert(dr);if(z.error)throw z.error}
     const wr=(db.workOrders||[]).map(w=>tmWORow(w,tmap));
     const oldWo=await tmSupabase.from('work_orders').select('id,work_order_no');if(oldWo.error)throw oldWo.error;
     const localWoKeys=new Set((db.workOrders||[]).map(w=>String(w.number||'').trim().toLowerCase()));
@@ -458,9 +494,38 @@ async function tmCloudSyncAll(){
     const oldT=await tmSupabase.from('tenders').select('id,tender_id');if(oldT.error)throw oldT.error;const keepT=new Set((db.tenders||[]).map(t=>tmGem(t.tenderNumber)));const staleT=(oldT.data||[]).filter(x=>!keepT.has(tmGem(x.tender_id))).map(x=>x.id);if(staleT.length){const z=await tmSupabase.from('tenders').delete().in('id',staleT);if(z.error)throw z.error}
     tmCloudStatus('☁️ Saved to Supabase');
   }catch(e){console.error(e);tmCloudStatus('☁️ Cloud sync failed — local data kept','error')}
-  finally{tmCloudBusy=false}
+  finally{tmCloudBusy=false;if(tmCloudResyncPending){tmCloudResyncPending=false;queueCloudSync()}}
 }
-function queueCloudSync(){if(!tmCloudReady)return;clearTimeout(tmCloudTimer);tmCloudTimer=setTimeout(()=>tmCloudSyncAll(),700)}
+function queueCloudSync(){
+  if(!tmCloudReady)return;
+  if(tmCloudBusy){tmCloudResyncPending=true;return;}
+  clearTimeout(tmCloudTimer);
+  tmCloudTimer=setTimeout(()=>tmCloudSyncAll(),500);
+}
+async function tmAutoCloudRefresh(){
+  if(!tmCloudReady||tmCloudBusy)return;
+  try{
+    const changed=await tmCloudLoad();
+    if(changed){updateStats();renderDashboard();renderTenders();renderDocuments();renderWorkOrders();}
+  }catch(e){console.warn('Automatic cloud refresh failed:',e)}
+}
+function tmStartAutomaticCloudSync(){
+  if(!tmCloudReady)return;
+  if(tmCloudPollTimer)clearInterval(tmCloudPollTimer);
+  // Fallback polling keeps two devices synchronized even when Realtime publication is not enabled.
+  tmCloudPollTimer=setInterval(()=>tmAutoCloudRefresh(),10000);
+  if(tmRealtimeChannel)try{tmSupabase.removeChannel(tmRealtimeChannel)}catch(e){}
+  try{
+    tmRealtimeChannel=tmSupabase.channel('tendermate-data-'+(window.tmAuthUser?.id||'user'))
+      .on('postgres_changes',{event:'*',schema:'public',table:'tenders'},()=>tmAutoCloudRefresh())
+      .on('postgres_changes',{event:'*',schema:'public',table:'documents'},()=>tmAutoCloudRefresh())
+      .on('postgres_changes',{event:'*',schema:'public',table:'work_orders'},()=>tmAutoCloudRefresh())
+      .on('postgres_changes',{event:'*',schema:'public',table:'financial_security'},()=>tmAutoCloudRefresh())
+      .on('postgres_changes',{event:'*',schema:'public',table:'bills'},()=>tmAutoCloudRefresh())
+      .on('postgres_changes',{event:'*',schema:'public',table:'letters'},()=>tmAutoCloudRefresh())
+      .subscribe();
+  }catch(e){console.warn('Realtime setup unavailable; polling remains active.',e)}
+}
 async function initTenderMateCloud(){
   try{
     if(!window.supabase?.createClient)throw new Error('Supabase client library did not load');
@@ -478,9 +543,11 @@ async function initTenderMateCloud(){
     }
     tmCloudReady=true;
     window.tmAuthUser=s.user;
+    const hadLocal=tmLocalHasData();
     const has=await tmCloudLoad();
-    if(!has&&tmLocalHasData())await tmCloudSyncAll();
-    tmCloudStatus('☁️ Cloud connected');
+    if((!has&&hadLocal)||tmCloudNeedsRepair||hadLocal)await tmCloudSyncAll();
+    tmCloudNeedsRepair=false;
+    tmCloudStatus('☁️ Cloud connected');tmStartAutomaticCloudSync();
     updateStats();renderDashboard();renderTenders();renderDocuments();renderWorkOrders();
     renderAccountPage();
   }catch(e){console.error('TenderMate cloud init failed',e);tmCloudStatus('☁️ Cloud unavailable — local mode','error')}
@@ -496,9 +563,11 @@ async function tmAuthSignIn(){
     const r=await tmSupabase.auth.signInWithPassword({email,password});
     if(r.error)throw r.error;
     window.tmAuthUser=r.data.user;tmCloudReady=true;
+    const hadLocal=tmLocalHasData();
     const has=await tmCloudLoad();
-    if(!has&&tmLocalHasData())await tmCloudSyncAll();
-    tmCloudStatus('☁️ Cloud connected');updateStats();renderDashboard();renderTenders();renderDocuments();renderWorkOrders();renderAccountPage();
+    if((!has&&hadLocal)||tmCloudNeedsRepair||hadLocal)await tmCloudSyncAll();
+    tmCloudNeedsRepair=false;
+    tmCloudStatus('☁️ Cloud connected');tmStartAutomaticCloudSync();updateStats();renderDashboard();renderTenders();renderDocuments();renderWorkOrders();renderAccountPage();
     if(out)out.innerHTML='<div class="result success">Signed in successfully. Your TenderMate data is now available on this device.</div>';
     home();
   }catch(e){console.error(e);if(out)out.innerHTML='<div class="result error">Sign in failed: '+esc(e.message||e)+'</div>'}
@@ -520,15 +589,18 @@ async function tmAuthCreateOrUpgrade(){
       const r=await tmSupabase.auth.updateUser({email,password});
       if(r.error)throw r.error;
       window.tmAuthUser=r.data.user||session.user;tmCloudReady=true;
+      const hadLocal=tmLocalHasData();
       await tmCloudLoad();
-      tmCloudStatus('☁️ Permanent account connected');updateStats();renderDashboard();renderAccountPage();
+      if(hadLocal||tmCloudNeedsRepair)await tmCloudSyncAll();
+      tmCloudNeedsRepair=false;
+      tmCloudStatus('☁️ Permanent account connected');tmStartAutomaticCloudSync();updateStats();renderDashboard();renderAccountPage();
       if(out)out.innerHTML='<div class="result success">Account created and your existing TenderMate cloud data is preserved. Use this email/password on your mobile.</div>';
       return;
     }
     const r=await tmSupabase.auth.signUp({email,password});
     if(r.error)throw r.error;
     if(r.data?.session){
-      window.tmAuthUser=r.data.user;tmCloudReady=true;await tmCloudLoad();
+      window.tmAuthUser=r.data.user;tmCloudReady=true;await tmCloudLoad();tmStartAutomaticCloudSync();
       if(out)out.innerHTML='<div class="result success">Account created and signed in.</div>';
       renderAccountPage();home();
     }else{
@@ -540,6 +612,8 @@ async function tmAuthCreateOrUpgrade(){
 async function tmAuthSignOut(){
   if(!tmSupabase)return;
   await tmSupabase.auth.signOut();
+  if(tmCloudPollTimer)clearInterval(tmCloudPollTimer);tmCloudPollTimer=null;
+  if(tmRealtimeChannel)try{await tmSupabase.removeChannel(tmRealtimeChannel)}catch(e){}tmRealtimeChannel=null;
   tmCloudReady=false;window.tmAuthUser=null;tmCloudStatus('☁️ Signed out','busy');updateStats();renderAccountPage();openPage('account');
 }
 async function tmManualCloudSync(){
@@ -1108,7 +1182,7 @@ async function saveDocument(){
  const id=existingId||'D-'+Date.now();
  const fileId=f?(existing?.fileId||id):(existing?.fileId||'');
  const record={
-  id,name:n,category:type,documentType:docTypeLabel(type),
+  id,name:n,category:type,documentType:docTypeLabel(type),dedupeKey:'',
   number:val('docNumber'),issueDate:val('docIssueDate'),expiryDate:val('docExpiryDate'),authority:val('docAuthority'),
   entityName:val('docEntityName'),identifier:val('docIdentifier'),financialYear:val('docFinancialYear'),assessmentYear:val('docAssessmentYear'),
   turnoverValue:val('docTurnoverValue'),quantity:val('docQuantity'),customer:val('docCustomer'),customerType:val('docCustomerType'),description:val('docDescription'),
@@ -2040,6 +2114,6 @@ function askAI(){
  if(!e)return;if(!q){e.innerHTML='<div class="result warning">Enter a question.</div>';return}
  try{e.innerHTML=aiQueryEngine(q);}catch(err){console.error('TenderMate Ask AI query error',err);e.innerHTML='<div class="result error"><b>Ask AI could not complete the query.</b><br>Please try a more specific question such as “Is Sukma EMD paid?” or “Show awarded tenders”.</div>';}
 }
-loadDB();updateStats();renderDashboard();renderTenders();renderDocuments();initTenderMateCloud();
+loadDB();tmRepairLegacyDuplicates();updateStats();renderDashboard();renderTenders();renderDocuments();initTenderMateCloud();
 </script>
 </body></html>
