@@ -775,7 +775,12 @@ function compareParsed(g,a){
 }
 async function readPDFText(file){
   if(!window.pdfjsLib)throw new Error('PDF reader library did not load. Check your internet connection and refresh the page.');
-  const buffer=await file.arrayBuffer();const pdf=await pdfjsLib.getDocument({data:buffer}).promise;let text='';const pageTexts=[];
+  // PDF.js transfers/owns the TypedArray passed to its worker. Keep a separate,
+  // untouched copy for any later pass (for example page-level OCR).
+  const raw=await file.arrayBuffer();
+  const reusableBytes=new Uint8Array(raw.slice(0));
+  const pdfBytes=reusableBytes.slice();
+  const pdf=await pdfjsLib.getDocument({data:pdfBytes}).promise;let text='';const pageTexts=[];
   for(let i=1;i<=pdf.numPages;i++){
     const page=await pdf.getPage(i);const content=await page.getTextContent();
     const items=content.items.map(x=>({str:String(x.str||'').trim(),x:Number(x.transform?.[4]||0),y:Number(x.transform?.[5]||0)})).filter(x=>x.str);
@@ -787,7 +792,7 @@ async function readPDFText(file){
     pageTexts.push(pageText);
     text+='\n--- PAGE '+i+' ---\n'+pageText+'\n';
   }
-  return {text,pages:pdf.numPages,pageTexts,buffer};
+  return {text,pages:pdf.numPages,pageTexts,buffer:reusableBytes.buffer};
 }
 
 function pdfPageNeedsOCR(pageText){
@@ -815,7 +820,9 @@ async function readPDFHybrid(file,out){
   }});
   const pageTexts=base.pageTexts.slice();
   try{
-    const pdf=await pdfjsLib.getDocument({data:base.buffer}).promise;
+    // readPDFText's buffer may have been transferred to PDF.js; pass a fresh copy.
+    const pdfBytes=new Uint8Array(base.buffer).slice();
+    const pdf=await pdfjsLib.getDocument({data:pdfBytes}).promise;
     for(let n=0;n<needs.length;n++){
       const pageNo=needs[n];
       if(out)out.innerHTML='<div class="result warning">🔎 OCR page '+pageNo+' of '+base.pages+' ('+(n+1)+' of '+needs.length+' OCR pages)… <span id="ocrProgress">0%</span></div>';
@@ -1013,8 +1020,10 @@ async function ocrImageFile(file,out){if(!window.Tesseract)throw new Error('OCR 
 async function ocrPDFFile(file,out){
   if(!window.pdfjsLib)throw new Error('PDF reader library did not load. Check your internet connection and refresh the page.');
   if(!window.Tesseract)throw new Error('OCR library did not load. Check your internet connection and refresh the page.');
-  const buffer=await file.arrayBuffer();
-  const pdf=await pdfjsLib.getDocument({data:buffer}).promise;
+  const raw=await file.arrayBuffer();
+  const reusableBytes=new Uint8Array(raw.slice(0));
+  const pdfBytes=reusableBytes.slice();
+  const pdf=await pdfjsLib.getDocument({data:pdfBytes}).promise;
   const worker=await Tesseract.createWorker('eng',1,{logger:m=>{
     if(m.status==='recognizing text'&&m.progress){
       const el=document.getElementById('ocrProgress');
