@@ -221,7 +221,7 @@
 
 <section id="bills" class="page"><button class="back" onclick="home()">← Back</button><div class="panel"><h2>🧾 Bill Generator</h2><div class="form-grid"><div><label>Bill Number</label><input id="billNumber"></div><div><label>Date</label><input id="billDate" type="date"></div><div><label>Buyer</label><input id="billBuyer"></div><div><label>Quantity</label><input id="billQty" type="number"></div><div><label>Rate</label><input id="billRate" type="number" step="0.01"></div><div><label>GST %</label><input id="billGST" type="number" step="0.01" value="0"></div></div><button onclick="saveBill()">Save Bill</button><div id="billResult"></div><div id="billList" style="margin-top:18px"></div></div></section>
 
-<section id="settings" class="page"><button class="back" onclick="home()">← Back</button><div class="panel"><h2>⚙️ Settings & Backup</h2><p class="panel-subtitle">TenderMate uses Supabase for cloud records, with browser-local storage retained as a working cache and backup. Original uploaded PDFs/images remain in this browser for now; cloud file storage can be added separately.</p><div class="result" style="margin-bottom:14px"><b>Cloud status:</b> <span id="tmSettingsCloudStatus">Connecting...</span></div><div class="actions"><button onclick="exportBackup()">⬇ Export Backup JSON</button><button class="secondary" onclick="document.getElementById('restoreFile').click()">⬆ Restore Backup JSON</button><button class="danger" onclick="clearAllData()">Delete All Local Data</button></div><input id="restoreFile" type="file" accept="application/json" class="hidden" onchange="restoreBackup(event)"><div id="settingsResult"></div><div class="result" style="margin-top:18px"><b>Current storage:</b> <span id="storageSummary"></span><br><span class="small">Source PDFs selected in the Tender Analysis screen are currently stored as file metadata/reference only, not as binary PDF files.</span></div></div></section>
+<section id="settings" class="page"><button class="back" onclick="home()">← Back</button><div class="panel"><h2>⚙️ Settings & Backup</h2><p class="panel-subtitle">TenderMate uses Supabase for cloud records, with browser-local storage retained as a working cache and backup. Original uploaded PDFs/images remain in this browser for now; cloud file storage can be added separately.</p><div class="result" style="margin-bottom:14px"><b>Cloud status:</b> <span id="tmSettingsCloudStatus">Connecting...</span></div><div class="actions"><button onclick="testTenderMateCloud()">☁️ Test Cloud Connection</button><button onclick="exportBackup()">⬇ Export Backup JSON</button><button class="secondary" onclick="document.getElementById('restoreFile').click()">⬆ Restore Backup JSON</button><button class="danger" onclick="clearAllData()">Delete All Local Data</button></div><input id="restoreFile" type="file" accept="application/json" class="hidden" onchange="restoreBackup(event)"><div id="settingsResult"></div><div class="result" style="margin-top:18px"><b>Current storage:</b> <span id="storageSummary"></span><br><span class="small">Source PDFs selected in the Tender Analysis screen are currently stored as file metadata/reference only, not as binary PDF files.</span></div></div></section>
 
 <div class="footer">TenderMate AI — local prototype for tender and business management</div>
 </div>
@@ -248,6 +248,43 @@ function tmCloudStatus(message,kind='ok'){
   if(!e){e=document.createElement('div');e.id='tmCloudStatus';e.style.cssText='position:fixed;right:14px;bottom:14px;z-index:9999;padding:8px 12px;border-radius:20px;font:12px Arial;box-shadow:0 2px 10px #0002';document.body.appendChild(e)}
   e.textContent=message;e.style.background=kind==='error'?'#fee2e2':kind==='busy'?'#fff7ed':'#dcfce7';e.style.color=kind==='error'?'#991b1b':kind==='busy'?'#9a3412':'#166534';
   clearTimeout(e._tm);e._tm=setTimeout(()=>e.style.display='none',kind==='error'?6000:2200);
+}
+
+async function testTenderMateCloud(){
+  const s=document.getElementById('tmSettingsCloudStatus');
+  try{
+    tmCloudStatus('☁️ Testing Supabase…','busy');
+    if(!window.supabase?.createClient)throw new Error('Supabase client library did not load');
+    if(!tmSupabase)tmSupabase=window.supabase.createClient(TM_SUPABASE_URL,TM_SUPABASE_PUBLISHABLE_KEY);
+
+    const sessionResult=await tmSupabase.auth.getSession();
+    if(sessionResult.error)throw new Error(`Session check failed (${sessionResult.error.code||'no-code'}): ${sessionResult.error.message}`);
+    let session=sessionResult.data?.session;
+    if(!session){
+      const a=await tmSupabase.auth.signInAnonymously();
+      if(a.error)throw new Error(`Anonymous sign-in failed (${a.error.code||'no-code'}): ${a.error.message}`);
+      session=a.data?.session;
+    }
+    if(!session)throw new Error('No authenticated Supabase session');
+
+    const tables=['tenders','documents','work_orders','financial_security','bills','letters','tender_locations'];
+    const counts=[];
+    for(const table of tables){
+      const q=await tmSupabase.from(table).select('*',{count:'exact',head:true});
+      if(q.error)throw new Error(`${table}: ${q.error.code||'no-code'} — ${q.error.message}`);
+      counts.push(`${table}: ${q.count??0}`);
+    }
+    tmCloudReady=true;
+    const msg=`Cloud OK — ${counts.join(', ')}`;
+    tmCloudStatus('☁️ Cloud connection OK');
+    if(s)s.textContent=msg;
+  }catch(e){
+    tmCloudReady=false;
+    const msg=String(e?.message||e||'Unknown error');
+    console.error('TenderMate cloud test failed',e);
+    tmCloudStatus(`☁️ Cloud test error: ${msg}`,'error');
+    if(s)s.textContent=`Error: ${msg}`;
+  }
 }
 function tmLocalHasData(){const d=window.TenderMateDB||{};return ['tenders','documents','workOrders','bills','letters'].some(k=>(d[k]||[]).length)}
 function tmGem(v){return normalizeGemId(v||'')}
@@ -354,9 +391,27 @@ function tmLetterLocal(r){let m={};try{m=JSON.parse(r.notes||'{}')}catch(e){}ret
   reference:m.reference||'',content:r.body||''}}
 
 async function tmCloudFetch(){
-  const qs=await Promise.all(['tenders','documents','work_orders','financial_security','bills','letters'].map(k=>tmSupabase.from(k).select('*')));
-  for(const q of qs)if(q.error)throw q.error;
-  return {tenders:qs[0].data||[],documents:qs[1].data||[],workOrders:qs[2].data||[],financial:qs[3].data||[],bills:qs[4].data||[],letters:qs[5].data||[]};
+  const tables=['tenders','documents','work_orders','financial_security','bills','letters'];
+  const out={};
+  for(const table of tables){
+    let q;
+    try{ q=await tmSupabase.from(table).select('*'); }
+    catch(err){ throw new Error(`Supabase ${table} request failed: ${err?.message||err}`); }
+    if(q.error){
+      const e=new Error(`Supabase ${table} failed (${q.error.code||'no-code'}): ${q.error.message||q.error.details||q.error.hint||q.error}`);
+      e.cause=q.error;
+      throw e;
+    }
+    out[table]=q.data||[];
+  }
+  return {
+    tenders:out.tenders,
+    documents:out.documents,
+    workOrders:out.work_orders,
+    financial:out.financial_security,
+    bills:out.bills,
+    letters:out.letters
+  };
 }
 async function tmCloudLoad(){
   const c=await tmCloudFetch();
@@ -409,22 +464,53 @@ async function tmCloudSyncAll(){
     // Remove tenders no longer present locally.
     const oldT=await tmSupabase.from('tenders').select('id,tender_id');if(oldT.error)throw oldT.error;const keepT=new Set((db.tenders||[]).map(t=>tmGem(t.tenderNumber)));const staleT=(oldT.data||[]).filter(x=>!keepT.has(tmGem(x.tender_id))).map(x=>x.id);if(staleT.length){const z=await tmSupabase.from('tenders').delete().in('id',staleT);if(z.error)throw z.error}
     tmCloudStatus('☁️ Saved to Supabase');
-  }catch(e){console.error(e);tmCloudStatus('☁️ Cloud sync failed — local data kept','error')}
+  }catch(e){
+    console.error('TenderMate cloud sync failed',e);
+    const msg=String(e?.message||e||'Unknown Supabase error');
+    tmCloudStatus(`☁️ Cloud sync error: ${msg}`,'error');
+    const s=document.getElementById('tmSettingsCloudStatus');
+    if(s)s.textContent=`Sync error: ${msg}`;
+  }
   finally{tmCloudBusy=false}
 }
 function queueCloudSync(){if(!tmCloudReady)return;clearTimeout(tmCloudTimer);tmCloudTimer=setTimeout(()=>tmCloudSyncAll(),700)}
 async function initTenderMateCloud(){
+  tmCloudReady=false;
   try{
     if(!window.supabase?.createClient)throw new Error('Supabase client library did not load');
+    tmCloudStatus('☁️ Connecting to Supabase…','busy');
+
     tmSupabase=window.supabase.createClient(TM_SUPABASE_URL,TM_SUPABASE_PUBLISHABLE_KEY);
-    let s=(await tmSupabase.auth.getSession()).data?.session;if(!s){const a=await tmSupabase.auth.signInAnonymously();if(a.error)throw a.error;s=a.data?.session}
+
+    const sessionResult=await tmSupabase.auth.getSession();
+    if(sessionResult.error)throw new Error(`Supabase session check failed (${sessionResult.error.code||'no-code'}): ${sessionResult.error.message}`);
+
+    let s=sessionResult.data?.session;
+    if(!s){
+      const a=await tmSupabase.auth.signInAnonymously();
+      if(a.error)throw new Error(`Anonymous sign-in failed (${a.error.code||'no-code'}): ${a.error.message}`);
+      s=a.data?.session;
+    }
     if(!s)throw new Error('Anonymous TenderMate session could not be created');
+
     tmCloudReady=true;
     const has=await tmCloudLoad();
-    if(!has&&tmLocalHasData())await tmCloudSyncAll();
+
+    if(!has&&tmLocalHasData()){
+      await tmCloudSyncAll();
+      if(!tmCloudBusy) await tmCloudLoad();
+    }
+
     tmCloudStatus('☁️ Cloud connected');
     updateStats();renderDashboard();renderTenders();renderDocuments();
-  }catch(e){console.error('TenderMate cloud init failed',e);tmCloudStatus('☁️ Cloud unavailable — local mode','error')}
+  }catch(e){
+    tmCloudReady=false;
+    console.error('TenderMate cloud init failed',e);
+    const msg=String(e?.message||e||'Unknown Supabase error');
+    tmCloudStatus(`☁️ Cloud error: ${msg}`,'error');
+    const s=document.getElementById('tmSettingsCloudStatus');
+    if(s)s.textContent=`Error: ${msg}`;
+  }
 }
 
 function esc(v){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));}
