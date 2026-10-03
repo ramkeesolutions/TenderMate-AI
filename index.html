@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
 <meta name="theme-color" content="#087f70">
-<title>TenderMate AI</title>
+<title>TenderMate AI</title><meta name="tendermate-build" content="2026-10-03-cloudsync-v3">
 <style>
 *{box-sizing:border-box;margin:0;padding:0}body{font-family:Arial,Helvetica,sans-serif;background:#f4f7f6;color:#17201f}.header{background:linear-gradient(135deg,#064e3b,#087f70);color:#fff;padding:20px;position:sticky;top:0;z-index:20;box-shadow:0 3px 12px #0003}.header-inner,.container{max-width:1200px;margin:auto}.header h1{font-size:25px}.header p{margin-top:5px;font-size:13px;opacity:.9}.container{padding:20px}.page{display:none}.page.active{display:block}.section-title{margin:10px 0 15px;font-size:21px}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:15px}.card,.stat,.panel{background:#fff;border-radius:16px;box-shadow:0 3px 12px #0001;border:1px solid #e1e8e6}.card{padding:20px;min-height:135px;cursor:pointer;transition:.2s}.card:hover{transform:translateY(-3px);box-shadow:0 7px 20px #0002}.icon{font-size:31px;margin-bottom:11px}.card h3{font-size:17px;margin-bottom:7px}.card p,.panel-subtitle,.small{color:#68736f;font-size:13px;line-height:1.45}.stat-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:22px}.stat{padding:18px}.stat strong{display:block;color:#087f70;font-size:27px}.stat span{color:#68736f;font-size:12px}.ai{margin-top:22px;padding:22px;border-radius:18px;background:linear-gradient(135deg,#111827,#1e293b);color:#fff}.ai h2{margin-bottom:7px}.ai p{color:#cbd5e1;font-size:13px;margin-bottom:15px}.ai-row{display:flex;gap:8px}.ai-row input{flex:1}.ai-prompts{display:flex;flex-wrap:wrap;gap:7px;margin-top:9px}.ai-prompts button{margin-top:0;padding:8px 11px;font-size:12px}.panel{padding:22px}.panel h2{margin-bottom:7px}.panel-subtitle{margin-bottom:20px}.form-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:5px 15px}.full{grid-column:1/-1}label{display:block;margin-top:10px;margin-bottom:5px;color:#43504d;font-size:13px;font-weight:bold}input,select,textarea{width:100%;padding:12px;border:1px solid #d5dfdc;border-radius:9px;font-size:14px;background:#fff}textarea{min-height:110px;resize:vertical}button{border:0;border-radius:9px;padding:11px 17px;background:#087f70;color:#fff;font-weight:bold;cursor:pointer;margin-top:10px}button:hover{filter:brightness(.93)}.secondary{background:#475569}.danger{background:#b91c1c}.light{background:#e7f5f2;color:#075e54}.back{background:#475569;margin-bottom:15px}.result{margin-top:18px;padding:16px;border-radius:10px;background:#ecfdf5;border-left:4px solid #087f70;line-height:1.6}.warning{background:#fff7ed;border-left-color:#ea580c}.error{background:#fef2f2;border-left-color:#dc2626}.success{background:#ecfdf5;border-left-color:#059669}.tabs{display:flex;flex-wrap:wrap;gap:7px;margin-bottom:18px}.tab{background:#e2e8f0;color:#334155}.tab.active{background:#087f70;color:#fff}.tab-content{display:none}.tab-content.active{display:block}.table-wrap{overflow:auto;margin-top:15px}table{width:100%;border-collapse:collapse;min-width:650px}th,td{padding:10px;border-bottom:1px solid #e5e7eb;text-align:left;font-size:13px}th{background:#f1f5f9;color:#334155}.badge{display:inline-block;padding:4px 8px;border-radius:20px;font-size:11px;font-weight:bold}.badge-green{background:#dcfce7;color:#166534}.badge-orange{background:#ffedd5;color:#9a3412}.badge-red{background:#fee2e2;color:#991b1b}.badge-blue{background:#dbeafe;color:#1e40af}.actions{display:flex;flex-wrap:wrap;gap:8px}.actions button{margin-top:0}.mini{font-size:11px;color:#64748b}.source-box{background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:14px;margin-top:14px}.source-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}.final-card{border:1px solid #cbd5e1;border-radius:12px;padding:14px;margin-bottom:12px;background:#f8fafc}.final-card strong{color:#075e54}.source-tag{font-size:11px;padding:3px 7px;border-radius:12px;background:#dbeafe;color:#1e40af;margin-left:6px}.conflict-row{display:grid;grid-template-columns:1fr 1fr 1fr 1fr auto;gap:8px;align-items:end;margin-bottom:8px}.hidden{display:none!important}.footer{text-align:center;padding:30px;color:#68736f;font-size:12px}.empty{text-align:center;padding:30px;color:#75817d}.search-box{margin-bottom:15px}.check-row{display:flex;gap:10px;align-items:center;padding:9px 0;border-bottom:1px solid #edf1ef}.check-row input{width:auto}.location-row{display:grid;grid-template-columns:1fr 160px auto;gap:8px;align-items:end}.doc-req-row{display:grid;grid-template-columns:1.4fr .8fr .6fr 1.2fr auto;gap:8px;align-items:end}.nav-actions{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:15px}.nav-actions button{margin-top:0}@media(max-width:700px){.container{padding:12px}.stat-grid{grid-template-columns:repeat(2,1fr)}.grid{grid-template-columns:1fr 1fr}.form-grid,.source-grid{grid-template-columns:1fr}.full{grid-column:auto}.ai-row{flex-direction:column}.conflict-row,.doc-req-row,.location-row{grid-template-columns:1fr}.header h1{font-size:21px}}@media(max-width:450px){.grid{grid-template-columns:1fr}.stat-grid{grid-template-columns:1fr 1fr}.card{min-height:120px}}@media print{.header,button,.back,.footer,.nav-actions{display:none!important}body{background:#fff}.panel{box-shadow:none}}
 
@@ -235,7 +235,7 @@
 </div></section>
 <section id="settings" class="page"><button class="back" onclick="home()">← Back</button><div class="panel"><h2>⚙️ Settings & Backup</h2><p class="panel-subtitle">TenderMate uses Supabase for cloud records, with browser-local storage retained as a working cache and backup. Original uploaded PDFs/images remain in this browser for now; cloud file storage can be added separately.</p><div id="accountBar" class="account-bar"><div><b>Account:</b> <span id="tmAccountLabel">Checking...</span><div class="small">Use the same account on your computer and mobile.</div></div><button class="light" onclick="openPage('account');renderAccountPage()">Manage Account</button></div><div class="result" style="margin-bottom:14px"><b>Cloud status:</b> <span id="tmSettingsCloudStatus">Connecting...</span></div><div class="actions"><button onclick="exportBackup()">⬇ Export Backup JSON</button><button class="secondary" onclick="document.getElementById('restoreFile').click()">⬆ Restore Backup JSON</button><button class="danger" onclick="clearAllData()">Delete All Local Data</button></div><input id="restoreFile" type="file" accept="application/json" class="hidden" onchange="restoreBackup(event)"><div id="settingsResult"></div><div class="result" style="margin-top:18px"><b>Current storage:</b> <span id="storageSummary"></span><br><span class="small">Source PDFs selected in the Tender Analysis screen are currently stored as file metadata/reference only, not as binary PDF files.</span></div></div></section>
 
-<div class="footer">TenderMate AI — local prototype for tender and business management</div>
+<div class="footer">TenderMate AI — cloud sync build 2026-10-03-v3</div>
 </div>
 
 <script>
@@ -318,7 +318,7 @@ function tmDocRow(d){
     notes:d.notes||''};
 }
 function tmDocLocal(r){
-  const x=r.extracted_data||{};return {id:r.id,name:r.document_name||'',category:r.document_type||'other',
+  const x=r.extracted_data||{};return {id:x.localId||r.id,name:r.document_name||'',category:r.document_type||'other',
     documentType:r.document_type||'Other',number:r.document_number||'',issueDate:r.issue_date||'',expiryDate:r.expiry_date||'',
     authority:r.issuing_authority||'',entityName:r.holder_entity||'',identifier:r.registration_number||'',
     financialYear:r.financial_year||'',assessmentYear:r.assessment_year||'',turnoverValue:r.turnover_value??'',
@@ -399,6 +399,13 @@ async function tmCloudLoad(){
   window.TenderMateDB.workOrders=tmMergeByKey(localSnapshot.workOrders||[],cloudWos,x=>String(x.number||x.id||''));
   window.TenderMateDB.bills=tmMergeByKey(localSnapshot.bills||[],cloudBills,x=>String(x.number||x.id||''));
   window.TenderMateDB.letters=tmMergeByKey(localSnapshot.letters||[],cloudLetters,x=>String(x.id||x.reference||''));
+  // De-duplicate any legacy local document copies by their stable localId/number/file name.
+  const seenDocs=new Map();
+  for(const d of window.TenderMateDB.documents||[]){
+    const k=String(d.id||d.number||d.fileName||d.name||'').trim().toLowerCase();
+    if(k) seenDocs.set(k,d);
+  }
+  window.TenderMateDB.documents=[...seenDocs.values()];
   window.TenderMateDB.deliveryChallans=localSnapshot.deliveryChallans||[];
   window.TenderMateDB.rates=localSnapshot.rates||[];
 
@@ -454,21 +461,6 @@ async function tmCloudSyncAll(){
   finally{tmCloudBusy=false}
 }
 function queueCloudSync(){if(!tmCloudReady)return;clearTimeout(tmCloudTimer);tmCloudTimer=setTimeout(()=>tmCloudSyncAll(),700)}
-async function tmManualCloudSync(){
-  const out=document.getElementById('settingsResult');
-  if(!tmSupabase||!tmCloudReady){if(out)out.innerHTML='<div class="result error">Please sign in to TenderMate first.</div>';return}
-  try{
-    if(out)out.innerHTML='<div class="result">☁️ Synchronizing all local records with your TenderMate cloud account…</div>';
-    await tmCloudSyncAll();
-    await tmCloudLoad();
-    updateStats();renderDashboard();renderTenders();renderDocuments();renderWorkOrders();
-    if(out)out.innerHTML='<div class="result success"><b>☁️ Cloud synchronization completed.</b><br>Your latest Tenders, Documents and Work Orders are now stored under this account.</div>';
-  }catch(e){
-    console.error('Manual cloud sync failed',e);
-    if(out)out.innerHTML='<div class="result error"><b>Cloud synchronization failed:</b> '+esc(e.message||e)+'</div>';
-  }
-}
-
 async function initTenderMateCloud(){
   try{
     if(!window.supabase?.createClient)throw new Error('Supabase client library did not load');
@@ -505,12 +497,8 @@ async function tmAuthSignIn(){
     if(r.error)throw r.error;
     window.tmAuthUser=r.data.user;tmCloudReady=true;
     const has=await tmCloudLoad();
-    // If this device has local records not yet present in the cloud, push them
-    // after the merge.  This makes sign-in on a second device safe while still
-    // allowing newly-created local records to reach the shared account.
-    if(tmLocalHasData()) await tmCloudSyncAll();
-    await tmCloudLoad();
-    tmCloudStatus('☁️ Cloud connected & synced');updateStats();renderDashboard();renderTenders();renderDocuments();renderWorkOrders();renderAccountPage();
+    if(!has&&tmLocalHasData())await tmCloudSyncAll();
+    tmCloudStatus('☁️ Cloud connected');updateStats();renderDashboard();renderTenders();renderDocuments();renderWorkOrders();renderAccountPage();
     if(out)out.innerHTML='<div class="result success">Signed in successfully. Your TenderMate data is now available on this device.</div>';
     home();
   }catch(e){console.error(e);if(out)out.innerHTML='<div class="result error">Sign in failed: '+esc(e.message||e)+'</div>'}
@@ -532,15 +520,8 @@ async function tmAuthCreateOrUpgrade(){
       const r=await tmSupabase.auth.updateUser({email,password});
       if(r.error)throw r.error;
       window.tmAuthUser=r.data.user||session.user;tmCloudReady=true;
-      // The existing browser may contain records that were created before or
-      // immediately after the account was upgraded.  Always push the merged
-      // local dataset to the permanent account so another device can see it.
       await tmCloudLoad();
-      if(tmLocalHasData()) await tmCloudSyncAll();
-      // Reload from cloud after the write so the local cache reflects the
-      // actual permanent-account dataset.
-      await tmCloudLoad();
-      tmCloudStatus('☁️ Permanent account connected & synced');updateStats();renderDashboard();renderAccountPage();
+      tmCloudStatus('☁️ Permanent account connected');updateStats();renderDashboard();renderAccountPage();
       if(out)out.innerHTML='<div class="result success">Account created and your existing TenderMate cloud data is preserved. Use this email/password on your mobile.</div>';
       return;
     }
@@ -561,13 +542,22 @@ async function tmAuthSignOut(){
   await tmSupabase.auth.signOut();
   tmCloudReady=false;window.tmAuthUser=null;tmCloudStatus('☁️ Signed out','busy');updateStats();renderAccountPage();openPage('account');
 }
+async function tmManualCloudSync(){
+  const out=document.getElementById('authResult');
+  if(!tmCloudReady){if(out)out.innerHTML='<div class="result error">Cloud is not connected on this device.</div>';return}
+  try{if(out)out.innerHTML='<div class="result">Uploading this device data to Supabase…</div>';await tmCloudSyncAll();await tmCloudLoad();updateStats();renderDashboard();renderTenders();renderDocuments();renderWorkOrders();if(out)out.innerHTML='<div class="result success">Cloud sync completed. Refresh the other device to load the same data.</div>';}catch(e){if(out)out.innerHTML='<div class="result error">Cloud sync failed: '+esc(e.message||e)+'</div>';}}
+async function tmManualCloudRefresh(){
+  const out=document.getElementById('authResult');
+  if(!tmCloudReady){if(out)out.innerHTML='<div class="result error">Cloud is not connected on this device.</div>';return}
+  try{if(out)out.innerHTML='<div class="result">Loading latest cloud data…</div>';await tmCloudLoad();updateStats();renderDashboard();renderTenders();renderDocuments();renderWorkOrders();if(out)out.innerHTML='<div class="result success">Latest cloud data loaded on this device.</div>';}catch(e){if(out)out.innerHTML='<div class="result error">Cloud refresh failed: '+esc(e.message||e)+'</div>';}}
+
 function renderAccountPage(){
   const u=window.tmAuthUser;
   const cur=document.getElementById('accountCurrent');
   const label=document.getElementById('tmAccountLabel');
   if(u){
     const anon=u.is_anonymous?'Anonymous session':'Permanent account';
-    if(cur)cur.innerHTML='<b>'+esc(anon)+'</b><br><span class="small">'+esc(u.email||'No email attached')+'</span>';
+    if(cur)cur.innerHTML='<b>'+esc(anon)+'</b><br><span class="small">'+esc(u.email||'No email attached')+'</span><br><span class="small">User ID: <code>'+esc(u.id||'')+'</code></span><div class="actions" style="margin-top:10px"><button onclick="tmManualCloudSync()">☁️ Sync This Device Now</button><button class="light" onclick="tmManualCloudRefresh()">↻ Refresh From Cloud</button></div>';
     if(label)label.textContent=u.email||anon;
   }else{
     if(cur)cur.innerHTML='<b>Not signed in</b><br><span class="small">Sign in to access your cloud data on this device.</span>';
@@ -1313,12 +1303,7 @@ function extractWorkOrderData(text,fileName){
 function fillWorkOrderFields(x){setVal('woNumber',x.number||'');setVal('woTenderId',x.tenderGemId||getWorkOrderGemId(x)||x.tenderId||x.gemId||x.bidRaNo||'');setVal('woDivision',x.division||x.officeDivision||'');setVal('woBuyer',x.buyer||'');setVal('woDate',toDateInput(x.date||''));setVal('woFY',x.financialYear||'');setVal('woQty',x.quantity||'');setVal('woRate',x.rate||'');setVal('woValue',x.orderValue||'');setVal('woDelivery',x.delivery||'');setVal('woContract',x.contract||'');setVal('woPeriod',x.period||'');setVal('woClone',x.clone||'');setVal('woCustomerType',x.customerType||'');setVal('woAddress',x.address||'');setVal('woDescription',x.description||'');setVal('woNotes',x.notes||'')}
 async function analyzeWorkOrder(){const f=document.getElementById('woUploadFile')?.files?.[0];if(!f){alert('Choose a work order first.');return}const out=document.getElementById('woAnalysisResult');if(out)out.innerHTML='<div class="result">Reading work order...</div>';try{let text='',pages=0,method='Text extraction';if(f.type==='application/pdf'){const x=await readPDFHybrid(f,out);text=x.text;pages=x.pages;method=x.method}else if(/^image\//.test(f.type)){text=await ocrImageFile(f,out);pages=1;method='OCR'}else{throw new Error('Unsupported work order type. Please upload PDF, JPG or PNG.')}tmPendingWorkOrder={file:f,text,pages,extracted:extractWorkOrderData(text,f.name),ocrMethod:method};fillWorkOrderFields(tmPendingWorkOrder.extracted);if(out)out.innerHTML='<div class="result success"><b>Work order analyzed.</b> '+pages+' page(s) · '+esc(method)+'. Review the extracted fields before saving. '+(text.trim().length<80?'<span class="badge badge-orange">Very little text extracted — verify manually.</span>':'')+'</div>'}catch(e){console.error(e);if(out)out.innerHTML='<div class="result error"><b>Work order analysis failed.</b> '+esc(e.message||e)+'</div>'}}
 async function saveWorkOrder(){const n=val('woNumber');if(!n){alert('Enter work order number.');return}const selectedTenderId=val('woSelectTender')||findTenderByGemId(val('woTenderId'))?.id||'';if(!selectedTenderId){alert('Select the awarded Tender / GeM ID before saving this Work Order.');return}const existingId=tmEditingWorkOrderId;const existing=existingId?window.TenderMateDB.workOrders.find(x=>String(x.id)===String(existingId)):null;const file=tmPendingWorkOrder.file;let fileId=existing?.fileId||'';try{if(file){fileId=fileId||'WOFILE-'+Date.now()+'-'+Math.random().toString(36).slice(2);await tmDocSaveFile(fileId,file)}}catch(e){alert('Work order data can be saved, but the original file could not be stored: '+e.message);return}
- const selectedTender=window.TenderMateDB.tenders.find(t=>String(t.id)===String(selectedTenderId));const selectedGem=selectedTender?tenderNumberOrGem(selectedTender):val('woTenderId');const selectedDivision=val('woDivision')||workOrderTenderDivision(selectedTender)||'';const record={...(existing||{}),id:existing?.id||'WO-'+Date.now(),number:n,tenderId:selectedTenderId,tenderGemId:selectedGem,division:selectedDivision,officeDivision:selectedDivision,buyer:val('woBuyer'),date:val('woDate'),financialYear:val('woFY'),quantity:val('woQty'),rate:val('woRate'),orderValue:val('woValue'),delivery:val('woDelivery'),contract:val('woContract'),period:val('woPeriod'),clone:val('woClone'),customerType:val('woCustomerType'),address:val('woAddress'),description:val('woDescription'),notes:val('woNotes'),fileId,fileName:file?.name||existing?.fileName||'',verificationStatus:'Needs verification',updatedDate:new Date().toISOString()};if(!existing)record.createdDate=new Date().toISOString();if(existing){const idx=window.TenderMateDB.workOrders.findIndex(x=>String(x.id)===String(existingId));window.TenderMateDB.workOrders[idx]=record}else window.TenderMateDB.workOrders.push(record);saveDB();
-  // A Work Order is important enough to write immediately to the shared cloud
-  // account instead of relying only on the background debounce.
-  let cloudSaved=false,cloudError='';
-  if(tmCloudReady){try{await tmCloudSyncAll();cloudSaved=true}catch(e){cloudError=e?.message||String(e)}}
-  tmEditingWorkOrderId=null;tmPendingWorkOrder={file:null,text:'',pages:0,extracted:{}};const b=document.getElementById('saveWorkOrderBtn');if(b)b.textContent='💾 Save Work Order & Original File';document.getElementById('woResult').innerHTML=cloudSaved?'<div class="result success"><b>'+ (existing?'Work order updated and synchronized.':'Work order saved and synchronized.')+'</b> The Work Order is now stored in your TenderMate cloud account and linked to the selected tender.</div>':'<div class="result warning"><b>'+ (existing?'Work order updated locally.':'Work order saved locally.')+'</b> Cloud synchronization did not complete'+(cloudError?': '+esc(cloudError):'.')+' Use Settings → Sync Now to retry.</div>';renderWorkOrders()}
+ const selectedTender=window.TenderMateDB.tenders.find(t=>String(t.id)===String(selectedTenderId));const selectedGem=selectedTender?tenderNumberOrGem(selectedTender):val('woTenderId');const selectedDivision=val('woDivision')||workOrderTenderDivision(selectedTender)||'';const record={...(existing||{}),id:existing?.id||'WO-'+Date.now(),number:n,tenderId:selectedTenderId,tenderGemId:selectedGem,division:selectedDivision,officeDivision:selectedDivision,buyer:val('woBuyer'),date:val('woDate'),financialYear:val('woFY'),quantity:val('woQty'),rate:val('woRate'),orderValue:val('woValue'),delivery:val('woDelivery'),contract:val('woContract'),period:val('woPeriod'),clone:val('woClone'),customerType:val('woCustomerType'),address:val('woAddress'),description:val('woDescription'),notes:val('woNotes'),fileId,fileName:file?.name||existing?.fileName||'',verificationStatus:'Needs verification',updatedDate:new Date().toISOString()};if(!existing)record.createdDate=new Date().toISOString();if(existing){const idx=window.TenderMateDB.workOrders.findIndex(x=>String(x.id)===String(existingId));window.TenderMateDB.workOrders[idx]=record}else window.TenderMateDB.workOrders.push(record);saveDB();tmEditingWorkOrderId=null;tmPendingWorkOrder={file:null,text:'',pages:0,extracted:{}};const b=document.getElementById('saveWorkOrderBtn');if(b)b.textContent='💾 Save Work Order & Original File';document.getElementById('woResult').innerHTML='<div class="result success"><b>'+ (existing?'Work order updated.':'Work order saved.')+'</b> Structured details and the original file are stored locally. Status: Needs verification.</div>';renderWorkOrders()}
 function editWorkOrder(id){const x=window.TenderMateDB.workOrders.find(w=>String(w.id)===String(id));if(!x){alert('Work order record not found.');return}openPage('workorders');tmEditingWorkOrderId=x.id;tmPendingWorkOrder={file:null,text:'',pages:0,extracted:{}};fillWorkOrderFields(x);syncWorkOrderSelectorsFromRecord(x);const b=document.getElementById('saveWorkOrderBtn');if(b)b.textContent='💾 Update Work Order';const r=document.getElementById('woAnalysisResult');if(r)r.innerHTML='<div class="result warning"><b>✏️ EDITING: '+esc(x.number||'Work Order')+'</b><br>Change any extracted details and click <b>Update Work Order</b>. The original file remains stored unless you select a replacement file.</div>';const p=document.getElementById('workorders');if(p)p.scrollIntoView({behavior:'smooth',block:'start'})}
 async function openWorkOrderFile(id){const x=window.TenderMateDB.workOrders.find(w=>String(w.id)===String(id));if(!x||!x.fileId){alert('No original file is stored for this work order.');return}await openDocumentFile(x.fileId)}
 async function verifyWorkOrder(id){const x=window.TenderMateDB.workOrders.find(w=>String(w.id)===String(id));if(!x)return;if(!confirm('Confirm that you have reviewed the extracted work order details and they are correct?'))return;x.verificationStatus='Verified';x.verifiedDate=new Date().toISOString();x.verifiedByUser=true;x.updatedDate=new Date().toISOString();saveDB();renderWorkOrders()}
